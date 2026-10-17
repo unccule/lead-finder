@@ -17,6 +17,35 @@
   </header>
 
   <main class="wrap">
+    <section class="panel" aria-labelledby="search-title">
+      <h2 id="search-title">Автопоиск компаний</h2>
+      <p class="hint panel-intro">
+        Программа найдёт в открытой карте OpenStreetMap компании выбранных сфер в городе и покажет,
+        у кого нет своего сайта. Сетевые (Магнит, KFC…) отсеиваются. На сайты 2ГИС и Яндекс Карт программа не заходит.
+      </p>
+      <form id="osm-form" novalidate autocomplete="off">
+        <div class="osm-row">
+          <div class="field osm-city">
+            <label for="osm-city">Город</label>
+            <input id="osm-city" name="city" value="Ставрополь" maxlength="100" required>
+          </div>
+          <fieldset class="osm-groups">
+            <legend>Сферы</legend>
+            <div id="osm-groups" class="checks"></div>
+          </fieldset>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn-primary">Найти компании</button>
+        </div>
+      </form>
+      <p id="osm-status" class="message" role="status" aria-live="polite" hidden></p>
+      <div id="osm-result" class="osm-result" hidden></div>
+      <p class="attribution">
+        Данные: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">участники OpenStreetMap</a>,
+        лицензия ODbL. В OpenStreetMap внесены не все компании, а «сайт не указан» не всегда значит, что сайта нет.
+      </p>
+    </section>
+
     <section class="panel" aria-labelledby="form-title">
       <h2 id="form-title">Добавить компанию</h2>
 
@@ -141,7 +170,15 @@
     </section>
 
     <section class="panel" aria-labelledby="list-title">
-      <h2 id="list-title">Компании <span id="companies-count" class="count">0</span></h2>
+      <div class="list-head">
+        <h2 id="list-title">Компании <span id="companies-count" class="count">0</span></h2>
+        <div class="check-bar">
+          <button id="check-sites" type="button" class="btn-secondary">Проверить сайты</button>
+          <button id="recheck-sites" type="button" class="btn-link">перепроверить все</button>
+        </div>
+      </div>
+      <p id="check-status" class="hint check-status" aria-live="polite"></p>
+      <div id="filter-tabs" class="tabs" role="group" aria-label="Показать компании"></div>
       <p id="list-status" class="list-status">Загружаю список…</p>
       <table id="companies-table" class="companies" hidden>
         <thead>

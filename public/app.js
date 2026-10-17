@@ -7,6 +7,8 @@ import { FIELDS, PHONE_ERROR, validateCompany } from '/shared/validate-company.j
 import { SOURCE_LABELS, normalizePhone, normalizeUrl, parseMapLink } from '/shared/normalize.js';
 import { classifyLink, linkKey } from '/shared/link-kinds.js';
 import { parseCardText } from '/shared/parse-card.js';
+import { SITE_GROUPS, siteStatus } from '/shared/site-status.js';
+import { initAutoSearch, request } from '/auto-search.js';
 
 const form = document.getElementById('company-form');
 const submitButton = form.querySelector('button[type="submit"]');
@@ -18,8 +20,13 @@ const table = document.getElementById('companies-table');
 const tbody = document.getElementById('companies-body');
 const countLabel = document.getElementById('companies-count');
 const listStatus = document.getElementById('list-status');
+const filterTabs = document.getElementById('filter-tabs');
+const checkButton = document.getElementById('check-sites');
+const recheckButton = document.getElementById('recheck-sites');
+const checkStatus = document.getElementById('check-status');
 
 let companies = [];
+let filter = 'all'; // какая вкладка над таблицей выбрана: 'all' или ключ из SITE_GROUPS
 
 // Быстрая вставка: HTML из буфера обмена, результат разбора и короткий итог «что заполнил».
 const paste = { html: '', result: null, summary: '' };
@@ -53,9 +60,18 @@ cardText.addEventListener('input', (event) => {
 });
 field('card_url').addEventListener('input', updateCardHint);
 field('phone').addEventListener('blur', onPhoneBlur);
+checkButton.addEventListener('click', () => startSiteChecks('new'));
+recheckButton.addEventListener('click', () => startSiteChecks('all'));
 
+initAutoSearch({
+  onImported: async (summary) => {
+    filter = 'all';
+    await loadCompanies();
+    if (summary.site_check_started) watchSiteChecks();
+  },
+});
 updateCardHint();
-loadCompanies();
+loadCompanies().then(refreshSiteChecks);
 
 // ---------- Загрузка и сохранение ----------
 
@@ -386,30 +402,107 @@ function showMessage(text, kind = '') {
   formMessage.hidden = !text;
 }
 
+// ---------- Проверка сайтов ----------
+
+let watchTimer = null; // пока идёт проверка, раз в 2 секунды спрашиваем сервер о ходе работы
+let lastDone = -1;
+
+async function startSiteChecks(scope) {
+  const { ok, data } = await request('POST', '/api/site-checks', { scope });
+  if (!ok) {
+    checkStatus.textContent = data.error;
+    return;
+  }
+  if (!data.running && data.total === 0) {
+    checkStatus.textContent = scope === 'all' ? 'Сайтов для проверки нет.' : 'Новых сайтов для проверки нет.';
+    return;
+  }
+  watchSiteChecks();
+}
+
+function watchSiteChecks() {
+  watchTimer ??= setInterval(refreshSiteChecks, 2000);
+  refreshSiteChecks();
+}
+
+async function refreshSiteChecks() {
+  const { ok, data } = await request('GET', '/api/site-checks');
+  if (!ok) return;
+
+  checkButton.textContent = data.pending > 0 ? `Проверить сайты (${data.pending})` : 'Проверить сайты';
+  checkButton.disabled = data.running;
+  recheckButton.disabled = data.running;
+
+  if (data.running) {
+    watchTimer ??= setInterval(refreshSiteChecks, 2000); // проверку запустили до обновления страницы
+    const now = data.current ? ` — сейчас ${shortUrl(data.current)}` : '';
+    checkStatus.textContent = `Проверяю сайты: ${data.done} из ${data.total}${now}. Между сайтами пауза 1,5 с.`;
+    if (data.done !== lastDone) {
+      lastDone = data.done;
+      await loadCompanies(); // свежие результаты сразу видны в таблице
+    }
+    return;
+  }
+
+  if (watchTimer) {
+    clearInterval(watchTimer);
+    watchTimer = null;
+    lastDone = -1;
+    checkStatus.textContent = `Проверка закончена: ${data.done} из ${data.total}.`;
+    await loadCompanies();
+  } else if (data.pending > 0) {
+    checkStatus.textContent = `Ещё не проверено сайтов: ${data.pending}.`;
+  }
+}
+
 // ---------- Таблица ----------
 
 function renderTable() {
+  const statuses = new Map(companies.map((company) => [company.id, siteStatus(company)]));
+  renderTabs(statuses);
+
+  const visible = filter === 'all' ? companies : companies.filter((company) => statuses.get(company.id).group === filter);
   countLabel.textContent = String(companies.length);
-  table.hidden = companies.length === 0;
-  listStatus.hidden = companies.length > 0;
-  listStatus.textContent = 'Пока пусто. Добавь первую компанию через форму выше.';
-  tbody.replaceChildren(...companies.map(companyRow));
+  table.hidden = visible.length === 0;
+  listStatus.hidden = visible.length > 0;
+  listStatus.textContent = companies.length === 0
+    ? 'Пока пусто. Найди компании автопоиском или добавь вручную через форму выше.'
+    : 'В этой вкладке пока никого нет.';
+  tbody.replaceChildren(...visible.map((company) => companyRow(company, statuses.get(company.id))));
 }
 
-function companyRow(company) {
+/** Вкладки «Все · Без сайта · Сайт с проблемами · …» с количеством в каждой. */
+function renderTabs(statuses) {
+  const counts = { all: companies.length };
+  for (const status of statuses.values()) counts[status.group] = (counts[status.group] ?? 0) + 1;
+
+  filterTabs.replaceChildren(...[['all', 'Все'], ...Object.entries(SITE_GROUPS)].map(([key, label]) => {
+    const button = textElement('button', `${label} · ${counts[key] ?? 0}`, 'tab');
+    button.type = 'button';
+    button.setAttribute('aria-pressed', String(filter === key));
+    button.addEventListener('click', () => {
+      filter = key;
+      renderTable();
+    });
+    return button;
+  }));
+}
+
+function companyRow(company, status) {
   const row = document.createElement('tr');
   row.dataset.id = String(company.id);
 
-  const cardLabel = company.source === 'other' ? 'Ссылка' : SOURCE_LABELS[company.source];
+  const cardLabel = { other: 'Ссылка', osm: 'OSM' }[company.source] ?? SOURCE_LABELS[company.source];
   const noteCell = cell('Заметка', company.note);
   noteCell.classList.add('note');
+  const [date, time] = formatDate(company.created_at).split(', ');
 
   row.append(
-    cell('Добавлена', formatDate(company.created_at)),
+    cell('Добавлена', textElement('span', date, 'date'), time && textElement('span', time, 'sub')),
     cell('Компания', textElement('strong', company.name), company.category && textElement('span', company.category, 'sub')),
     cell('Адрес', [company.city, company.address].filter(Boolean).join(', ')),
     cell('Телефон', company.phone && link(`tel:${company.phone}`, company.phone, 'nowrap')),
-    cell('Сайт / соцсети', ...websiteParts(company)),
+    cell('Сайт / соцсети', ...websiteParts(company), siteLine(status, company.site_check)),
     cell('Карточка', company.card_url && externalLink(company.card_url, `${cardLabel} ↗`)),
     cell('Рейтинг', ratingText(company)),
     noteCell,
@@ -432,6 +525,33 @@ function websiteParts(company) {
     parts.push(line);
   }
   return parts;
+}
+
+/** Строка под ссылками: «Есть проблемы: нет мобильной версии» или «Сайт в порядке · Tilda · 0,8 с». */
+function siteLine(status, check) {
+  const line = document.createElement('span');
+  line.className = 'site-line';
+  line.append(textElement('span', status.label, `site-badge ${status.group}`));
+
+  const details = [];
+  if (status.label === 'Есть проблемы' || (status.group === 'problem' && status.problems[0]?.startsWith('сайт отвечает'))) {
+    details.push(status.problems.join(', '));
+  }
+  if (status.label === 'Проверь вручную' && check?.note) details.push(check.note);
+  if (check && (check.status === 'ok' || check.status === 'parked')) {
+    details.push(...[
+      check.platform,
+      check.response_ms != null && `${(check.response_ms / 1000).toFixed(1).replace('.', ',')} с`,
+      check.page_bytes != null && formatBytes(check.page_bytes),
+      status.group === 'ok' && check.copyright_year && `© ${check.copyright_year}`,
+    ].filter(Boolean));
+  }
+  if (details.length > 0) line.append(textElement('span', details.join(' · '), 'site-facts'));
+  return line;
+}
+
+function formatBytes(bytes) {
+  return bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1).replace('.', ',')} МБ` : `${Math.max(1, Math.round(bytes / 1000))} КБ`;
 }
 
 /** Ячейка таблицы. label — подпись, которую видно на телефоне вместо заголовка столбца. */

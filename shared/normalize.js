@@ -6,6 +6,7 @@
 export const SOURCE_LABELS = {
   '2gis': '2ГИС',
   yandex: 'Яндекс Карты',
+  osm: 'OpenStreetMap',
   other: 'Другое',
 };
 
@@ -65,6 +66,7 @@ export function normalizeUrl(raw) {
 // чтобы «evil2gis.ru» или «2gis.ru.evil.com» не сошли за настоящий 2ГИС.
 const DGIS_HOST = /(^|\.)2gis\.(ru|com|kz|kg|uz|by|ae|am|az|ge|cy|cz|it|cl)$/;
 const YANDEX_HOST = /(^|\.)(yandex\.(ru|com|kz|by|uz|az|tj|tm|md|com\.tr|com\.am|com\.ge|ee|lt|lv|fr|co\.il)|ya\.ru)$/;
+const OSM_HOST = /(^|\.)(openstreetmap\.org|osm\.org)$/;
 
 /**
  * Определяет источник по ссылке на карточку и достаёт ID организации, если он есть в самой ссылке.
@@ -72,6 +74,7 @@ const YANDEX_HOST = /(^|\.)(yandex\.(ru|com|kz|by|uz|az|tj|tm|md|com\.tr|com\.am
  *   https://yandex.ru/maps/org/romashka/1234567890/      → { source: 'yandex', sourceId: '1234567890' }
  *   https://yandex.ru/maps/43/kazan/?oid=1234567890&...  → { source: 'yandex', sourceId: '1234567890' }
  *   https://go.2gis.com/abc12                            → { source: '2gis',   sourceId: null }
+ *   https://www.openstreetmap.org/node/123456            → { source: 'osm',    sourceId: 'node/123456' }
  * Сеть не используется: короткие ссылки не раскрываем (на сайты карт программа не ходит),
  * поэтому у них просто нет ID.
  */
@@ -94,6 +97,11 @@ export function parseMapLink(raw) {
     const oid = url.searchParams.get('oid') ?? '';
     const sourceId = match ? match[1] : /^\d+$/.test(oid) ? oid : null;
     return { source: 'yandex', sourceId };
+  }
+
+  if (OSM_HOST.test(host)) {
+    const match = url.pathname.match(/^\/(node|way|relation)\/(\d+)/);
+    return { source: 'osm', sourceId: match ? `${match[1]}/${match[2]}` : null };
   }
 
   return { source: 'other', sourceId: null };

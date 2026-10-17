@@ -49,4 +49,14 @@ export const MIGRATIONS = [
     // Ссылки храним текстом, по одной на строку. У старых записей поле будет пустым.
     sql: `ALTER TABLE companies ADD COLUMN other_links TEXT NOT NULL DEFAULT ''`,
   },
+  {
+    version: 3,
+    name: 'Результат проверки сайта',
+    // Результат храним одним «пакетом» в формате JSON (https, мобильная версия, год в ©…).
+    // Когда появятся новые признаки, таблицу менять не придётся.
+    sql: `
+      ALTER TABLE companies ADD COLUMN site_check TEXT;
+      ALTER TABLE companies ADD COLUMN site_checked_at TEXT;
+    `,
+  },
 ];

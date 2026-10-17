@@ -140,16 +140,28 @@ function unwrapRedirect(raw) {
 
 // ---------- Что подставить в форму ----------
 
+/**
+ * Из списка ссылок выбирает основную («Сайт или соцсеть») и остальные («Соцсети и другие ссылки»).
+ * Используется и быстрой вставкой, и автопоиском. Ссылки на карты и служебные сюда не попадают.
+ */
+export function pickLinks(urls) {
+  const webLinks = collectLinks(urls)
+    .filter((link) => WEBSITE_PRIORITY.includes(link.kind))
+    .sort((a, b) => WEBSITE_PRIORITY.indexOf(a.kind) - WEBSITE_PRIORITY.indexOf(b.kind));
+  return {
+    website: webLinks[0]?.url ?? '',
+    other_links: webLinks.slice(1, 1 + MAX_OTHER_LINKS).map((link) => link.url),
+  };
+}
+
 function pickFields(phones, links) {
   const fill = {};
   if (phones.length > 0) fill.phone = phones[0];
 
-  const webLinks = links
-    .filter((link) => WEBSITE_PRIORITY.includes(link.kind))
-    .sort((a, b) => WEBSITE_PRIORITY.indexOf(a.kind) - WEBSITE_PRIORITY.indexOf(b.kind));
-  if (webLinks.length > 0) {
-    fill.website = webLinks[0].url;
-    fill.other_links = webLinks.slice(1, 1 + MAX_OTHER_LINKS).map((link) => link.url);
+  const { website, other_links: otherLinks } = pickLinks(links.map((link) => link.url));
+  if (website) {
+    fill.website = website;
+    fill.other_links = otherLinks;
   }
 
   // Ссылку на карточку подставляем, только если организация одна. Если в тексте попались

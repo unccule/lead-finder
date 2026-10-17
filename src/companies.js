@@ -1,10 +1,11 @@
 // Работа с компаниями в базе: список, добавление, поиск дублей.
 import { validateCompany } from '../shared/validate-company.js';
 import { SOURCE_LABELS, textKey } from '../shared/normalize.js';
+import { classifyLink } from '../shared/link-kinds.js';
 
 // Колонки, которые отдаём наружу. Служебные name_key / address_key остаются внутри.
 const PUBLIC_COLUMNS = `id, name, category, city, address, card_url, source, source_id,
-  phone, website, other_links, rating, reviews_count, note, created_at, updated_at`;
+  phone, website, other_links, rating, reviews_count, note, site_check, site_checked_at, created_at, updated_at`;
 
 /** Все компании, новые сверху. */
 export function listCompanies(db) {
@@ -28,12 +29,7 @@ export function addCompany(db, input) {
   const check = validateCompany(input);
   if (!check.ok) return { ok: false, reason: 'invalid', errors: check.errors };
 
-  const data = {
-    ...check.data,
-    name_key: textKey(check.data.name),
-    address_key: textKey(check.data.address),
-  };
-
+  const data = withKeys(check.data);
   const duplicate = findDuplicate(db, data);
   if (duplicate) {
     return {
@@ -55,6 +51,55 @@ export function addCompany(db, input) {
   `).run({ ...data, now });
 
   return { ok: true, company: getCompany(db, lastInsertRowid) };
+}
+
+/**
+ * Добавляет много компаний сразу (например, найденных автопоиском).
+ * Каждая проходит ту же проверку и ту же защиту от дублей, что и форма.
+ * Всё внутри одной транзакции: так в сотни раз быстрее, чем сохранять по одной.
+ */
+export function addCompanies(db, inputs) {
+  const summary = { added: 0, duplicates: 0, invalid: 0 };
+  db.exec('BEGIN');
+  try {
+    for (const input of inputs) {
+      const result = addCompany(db, input);
+      if (result.ok) summary.added += 1;
+      else if (result.reason === 'duplicate') summary.duplicates += 1;
+      else summary.invalid += 1;
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+  return summary;
+}
+
+/** Есть ли уже такая компания в базе (по тем же правилам дублей)? Возвращает её или null. */
+export function findExisting(db, input) {
+  const check = validateCompany(input);
+  if (!check.ok) return null;
+  return findDuplicate(db, withKeys(check.data))?.company ?? null;
+}
+
+/** Компании, у которых есть собственный сайт для проверки. scope: 'new' — ещё не проверенные, 'all' — все. */
+export function companiesToCheck(db, scope = 'new') {
+  const where = scope === 'all' ? "website != ''" : "website != '' AND site_checked_at IS NULL";
+  return db.prepare(`SELECT id, website FROM companies WHERE ${where} ORDER BY id`).all()
+    .map(toPlain)
+    .filter((company) => classifyLink(company.website).kind === 'site');
+}
+
+/** Сохраняет результат проверки сайта. */
+export function saveSiteCheck(db, id, result) {
+  const now = new Date().toISOString();
+  db.prepare('UPDATE companies SET site_check = ?, site_checked_at = ?, updated_at = ? WHERE id = ?')
+    .run(JSON.stringify(result), result.checked_at ?? now, now, id);
+}
+
+function withKeys(data) {
+  return { ...data, name_key: textKey(data.name), address_key: textKey(data.address) };
 }
 
 /**
@@ -93,6 +138,18 @@ function findDuplicate(db, data) {
 }
 
 // node:sqlite отдаёт строки как «голые» объекты без прототипа — превращаем в обычные.
+// Результат проверки сайта хранится текстом JSON — сразу превращаем его обратно в объект.
 function toPlain(row) {
-  return { ...row };
+  const company = { ...row };
+  if ('site_check' in company) company.site_check = parseJson(company.site_check);
+  return company;
+}
+
+function parseJson(text) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }

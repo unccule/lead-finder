@@ -129,6 +129,37 @@ button { font: inherit; border-radius: 8px; padding: 10px 18px; border: 1px soli
 .message.warning { background: var(--warn-bg); color: var(--warn); }
 .message.error { background: var(--danger-bg); color: var(--danger); }
 
+/* Автопоиск */
+.panel-intro { margin: -6px 0 12px; }
+.osm-row { display: grid; gap: 12px 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .osm-row { grid-template-columns: minmax(0, 14rem) minmax(0, 1fr); } }
+.osm-groups { margin: 0; padding: 0; border: 0; min-width: 0; }
+.osm-groups legend { padding: 0; margin-bottom: 4px; font-weight: 600; font-size: .95rem; }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.checks label { display: inline-flex; align-items: center; gap: 6px; min-width: 0; cursor: pointer; }
+.checks input { width: auto; margin: 0; }
+.osm-result { display: grid; gap: 10px; margin-top: 12px; padding: 12px; border-radius: var(--radius); background: var(--paste-bg); }
+.osm-result p { margin: 0; overflow-wrap: anywhere; }
+.osm-place { font-weight: 600; }
+.sample-list { margin: 0; padding-left: 1.2em; display: grid; gap: 2px; font-size: .9rem; overflow-wrap: anywhere; }
+.attribution { margin: 12px 0 0; font-size: .8rem; color: var(--muted); }
+
+/* Проверка сайтов и вкладки-фильтры */
+.list-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 6px; }
+.list-head h2 { margin: 0; }
+.check-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.btn-link { padding: 4px 6px; background: transparent; border: 0; color: var(--accent); text-decoration: underline; font-size: .9rem; }
+.check-status { margin: 0 0 10px; min-height: 1.2em; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.tab { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: .9rem; }
+.tab[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.site-line { display: block; margin-top: 4px; font-size: .85rem; }
+.site-badge { display: inline-block; margin-right: 6px; padding: 0 7px; border-radius: 999px; font-size: .75rem; font-weight: 600; white-space: nowrap; }
+.site-badge.none, .site-badge.problem { background: var(--danger-bg); color: var(--danger); }
+.site-badge.ok { background: var(--ok-bg); color: var(--ok); }
+.site-badge.unchecked { background: var(--bg); color: var(--muted); }
+.site-facts { color: var(--muted); }
+
 .list-status { margin: 0; color: var(--muted); }
 .list-status.is-error { color: var(--danger); }
 
@@ -139,10 +170,13 @@ button { font: inherit; border-radius: 8px; padding: 10px 18px; border: 1px soli
   vertical-align: top;
   padding: 10px 8px;
   border-bottom: 1px solid var(--line);
-  /* длинные ссылки переносятся, а не растягивают страницу вбок */
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
-.companies th { font-size: .8rem; font-weight: 600; color: var(--muted); }
+/* Длинные ссылки и заметки можно переносить где угодно — иначе они растянут страницу вбок.
+   Обычные слова так не рвём: «Рейт-инг» посреди слова читать неудобно. */
+.companies a, .companies .note, .companies .site-facts { overflow-wrap: anywhere; }
+.companies th { font-size: .8rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.companies .date { white-space: nowrap; }
 .companies .sub { display: block; color: var(--muted); font-size: .9em; }
 .companies .muted { color: var(--muted); }
 .companies .note { white-space: pre-line; }
@@ -154,6 +188,7 @@ button { font: inherit; border-radius: 8px; padding: 10px 18px; border: 1px soli
 /* На узком экране строка таблицы превращается в карточку: «подпись — значение» */
 @media (max-width: 899px) {
   .companies thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .companies th { white-space: normal; }
   .companies, .companies tbody, .companies tr, .companies td { display: block; }
   .companies tr { border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 12px; margin-bottom: 12px; }
   .companies td {
