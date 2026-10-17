@@ -7,7 +7,8 @@ import { FIELDS, PHONE_ERROR, validateCompany } from '/shared/validate-company.j
 import { SOURCE_LABELS, normalizePhone, normalizeUrl, parseMapLink } from '/shared/normalize.js';
 import { classifyLink, linkKey } from '/shared/link-kinds.js';
 import { parseCardText } from '/shared/parse-card.js';
-import { SITE_GROUPS, siteStatus } from '/shared/site-status.js';
+import { SITE_GROUPS } from '/shared/site-status.js';
+import { assessCompany, byHotness } from '/shared/hotness.js';
 import { initAutoSearch, request } from '/auto-search.js';
 
 const form = document.getElementById('company-form');
@@ -24,6 +25,7 @@ const filterTabs = document.getElementById('filter-tabs');
 const checkButton = document.getElementById('check-sites');
 const recheckButton = document.getElementById('recheck-sites');
 const checkStatus = document.getElementById('check-status');
+const sortSelect = document.getElementById('sort-order');
 
 let companies = [];
 let filter = 'all'; // какая вкладка над таблицей выбрана: 'all' или ключ из SITE_GROUPS
@@ -60,6 +62,7 @@ cardText.addEventListener('input', (event) => {
 });
 field('card_url').addEventListener('input', updateCardHint);
 field('phone').addEventListener('blur', onPhoneBlur);
+sortSelect.addEventListener('change', renderTable);
 checkButton.addEventListener('click', () => startSiteChecks('new'));
 recheckButton.addEventListener('click', () => startSiteChecks('all'));
 
@@ -458,23 +461,29 @@ async function refreshSiteChecks() {
 // ---------- Таблица ----------
 
 function renderTable() {
-  const statuses = new Map(companies.map((company) => [company.id, siteStatus(company)]));
-  renderTabs(statuses);
+  // Горячесть считаем один раз на компанию и дальше берём из этой «таблички».
+  const assessments = new Map(companies.map((company) => [company.id, assessCompany(company)]));
+  renderTabs(assessments);
 
-  const visible = filter === 'all' ? companies : companies.filter((company) => statuses.get(company.id).group === filter);
+  const visible = filter === 'all'
+    ? [...companies]
+    : companies.filter((company) => assessments.get(company.id).site.group === filter);
+  // Список с сервера уже идёт «новые сверху», поэтому для этого порядка ничего делать не нужно.
+  if (sortSelect.value === 'hot') visible.sort(byHotness(assessments));
+
   countLabel.textContent = String(companies.length);
   table.hidden = visible.length === 0;
   listStatus.hidden = visible.length > 0;
   listStatus.textContent = companies.length === 0
     ? 'Пока пусто. Найди компании автопоиском или добавь вручную через форму выше.'
     : 'В этой вкладке пока никого нет.';
-  tbody.replaceChildren(...visible.map((company) => companyRow(company, statuses.get(company.id))));
+  tbody.replaceChildren(...visible.map((company) => companyRow(company, assessments.get(company.id))));
 }
 
 /** Вкладки «Все · Без сайта · Сайт с проблемами · …» с количеством в каждой. */
-function renderTabs(statuses) {
+function renderTabs(assessments) {
   const counts = { all: companies.length };
-  for (const status of statuses.values()) counts[status.group] = (counts[status.group] ?? 0) + 1;
+  for (const { site } of assessments.values()) counts[site.group] = (counts[site.group] ?? 0) + 1;
 
   filterTabs.replaceChildren(...[['all', 'Все'], ...Object.entries(SITE_GROUPS)].map(([key, label]) => {
     const button = textElement('button', `${label} · ${counts[key] ?? 0}`, 'tab');
@@ -488,21 +497,24 @@ function renderTabs(statuses) {
   }));
 }
 
-function companyRow(company, status) {
+function companyRow(company, assessment) {
   const row = document.createElement('tr');
   row.dataset.id = String(company.id);
 
   const cardLabel = { other: 'Ссылка', osm: 'OSM' }[company.source] ?? SOURCE_LABELS[company.source];
   const noteCell = cell('Заметка', company.note);
   noteCell.classList.add('note');
-  const [date, time] = formatDate(company.created_at).split(', ');
+  const [date] = formatDate(company.created_at).split(', ');
 
   row.append(
-    cell('Добавлена', textElement('span', date, 'date'), time && textElement('span', time, 'sub')),
-    cell('Компания', textElement('strong', company.name), company.category && textElement('span', company.category, 'sub')),
+    heatCell(assessment),
+    cell('Компания',
+      textElement('strong', company.name),
+      company.category && textElement('span', company.category, 'sub'),
+      textElement('span', `добавлена ${date}`, 'sub')),
     cell('Адрес', [company.city, company.address].filter(Boolean).join(', ')),
     cell('Телефон', company.phone && link(`tel:${company.phone}`, company.phone, 'nowrap')),
-    cell('Сайт / соцсети', ...websiteParts(company), siteLine(status, company.site_check)),
+    cell('Сайт / соцсети', ...websiteParts(company), siteLine(assessment.site, company.site_check)),
     cell('Карточка', company.card_url && externalLink(company.card_url, `${cardLabel} ↗`)),
     cell('Рейтинг', ratingText(company)),
     noteCell,
@@ -527,16 +539,31 @@ function websiteParts(company) {
   return parts;
 }
 
-/** Строка под ссылками: «Есть проблемы: нет мобильной версии» или «Сайт в порядке · Tilda · 0,8 с». */
+/** Ячейка «Горячесть»: балл, уровень и причины — «+60 вместо сайта — только ВКонтакте». */
+function heatCell(assessment) {
+  const head = document.createElement('span');
+  head.className = 'heat-head';
+  head.append(
+    textElement('span', String(assessment.score), `heat ${assessment.level.id}`),
+    textElement('span', assessment.level.label, 'heat-label'),
+  );
+  const reasons = document.createElement('ul');
+  reasons.className = 'reasons';
+  reasons.append(...assessment.reasons.map((item) =>
+    textElement('li', item.points > 0 ? `+${item.points} ${item.text}` : item.text)));
+  return cell('Горячесть', head, reasons);
+}
+
+/**
+ * Строка под ссылками: «Есть проблемы · WordPress · 0,6 с» или «Сайт в порядке · Tilda · 0,8 с».
+ * Сами проблемы с баллами — в столбце «Горячесть», здесь не повторяем.
+ */
 function siteLine(status, check) {
   const line = document.createElement('span');
   line.className = 'site-line';
   line.append(textElement('span', status.label, `site-badge ${status.group}`));
 
   const details = [];
-  if (status.label === 'Есть проблемы' || (status.group === 'problem' && status.problems[0]?.startsWith('сайт отвечает'))) {
-    details.push(status.problems.join(', '));
-  }
   if (status.label === 'Проверь вручную' && check?.note) details.push(check.note);
   if (check && (check.status === 'ok' || check.status === 'parked')) {
     details.push(...[

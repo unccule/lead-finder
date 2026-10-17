@@ -173,6 +173,11 @@
       <div class="list-head">
         <h2 id="list-title">Компании <span id="companies-count" class="count">0</span></h2>
         <div class="check-bar">
+          <label class="sort" for="sort-order">Порядок:</label>
+          <select id="sort-order">
+            <option value="hot" selected>сначала горячие</option>
+            <option value="new">сначала новые</option>
+          </select>
           <button id="check-sites" type="button" class="btn-secondary">Проверить сайты</button>
           <button id="recheck-sites" type="button" class="btn-link">перепроверить все</button>
         </div>
@@ -183,7 +188,7 @@
       <table id="companies-table" class="companies" hidden>
         <thead>
           <tr>
-            <th scope="col">Добавлена</th>
+            <th scope="col">Горячесть</th>
             <th scope="col">Компания</th>
             <th scope="col">Адрес</th>
             <th scope="col">Телефон</th>

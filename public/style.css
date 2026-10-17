@@ -153,6 +153,19 @@ button { font: inherit; border-radius: 8px; padding: 10px 18px; border: 1px soli
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .tab { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: .9rem; }
 .tab[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sort { font-size: .9rem; color: var(--muted); }
+select { font: inherit; font-size: .9rem; padding: 7px 8px; border: 1px solid var(--field-border); border-radius: 8px; background: #fff; color: var(--text); }
+
+/* Горячесть */
+.heat-head { display: flex; align-items: baseline; gap: 6px; }
+.heat { min-width: 2.4em; padding: 1px 8px; border-radius: 8px; font-weight: 700; font-size: 1.05rem; text-align: center; }
+.heat.hot { background: #ffe0d6; color: #b3261e; }
+.heat.warm { background: var(--warn-bg); color: var(--warn); }
+.heat.cold { background: var(--bg); color: var(--muted); }
+.heat-label { font-size: .8rem; color: var(--muted); }
+.reasons { display: grid; gap: 2px; margin: 4px 0 0; padding: 0; list-style: none; font-size: .8rem; color: var(--muted); }
+@media (min-width: 900px) { .companies td:first-child { min-width: 10.5rem; } }
+
 .site-line { display: block; margin-top: 4px; font-size: .85rem; }
 .site-badge { display: inline-block; margin-right: 6px; padding: 0 7px; border-radius: 999px; font-size: .75rem; font-weight: 600; white-space: nowrap; }
 .site-badge.none, .site-badge.problem { background: var(--danger-bg); color: var(--danger); }

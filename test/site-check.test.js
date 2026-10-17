@@ -63,7 +63,9 @@ test('старый сайт: без мобильной версии, © 2016, ht
 
   const status = siteStatus({ website: 'http://motor26.ru', site_check: result }, { now: NOW() });
   assert.equal(status.group, 'problem');
-  assert.deepEqual(status.problems, ['нет HTTPS — браузер пишет «Не защищено»', 'нет мобильной версии', '© 2016 — сайт давно не обновляли']);
+  assert.deepEqual(status.problems.map((p) => p.code), ['no_mobile', 'no_https', 'old_copyright']);
+  assert.deepEqual(status.problems.map((p) => p.text),
+    ['нет мобильной версии', 'нет HTTPS — браузер пишет «Не защищено»', '© 2016 — сайт давно не обновляли']);
 });
 
 test('переадресация http → https проходится (это та же главная страница)', async () => {
@@ -156,7 +158,7 @@ test('сайт на бесплатном адресе конструктора �
   assert.equal(result.free_host, 'Tilda');
   const status = siteStatus({ website: 'romashka.tilda.ws', site_check: result }, { now: NOW() });
   assert.equal(status.group, 'problem');
-  assert.deepEqual(status.problems, ['сайт на бесплатном адресе конструктора (Tilda)']);
+  assert.deepEqual(status.problems, [{ code: 'free_host', text: 'сайт на бесплатном адресе конструктора (Tilda)' }]);
 });
 
 test('адреса внутренней сети не открываем (защита от ссылки-ловушки)', async () => {
@@ -188,7 +190,8 @@ test('старые сайты в кодировке windows-1251 читаютс�
 });
 
 test('итог по компании: нет сайта, только соцсеть, не проверен', () => {
-  assert.deepEqual(siteStatus({ website: '' }), { group: 'none', label: 'Сайта нет', problems: ['нет сайта'] });
+  assert.deepEqual(siteStatus({ website: '' }),
+    { group: 'none', label: 'Сайта нет', problems: [{ code: 'no_site', text: 'нет сайта' }] });
   assert.equal(siteStatus({ website: 'https://vk.com/romashka' }).label, 'Только ВКонтакте');
   assert.equal(siteStatus({ website: 'https://taplink.cc/romashka' }).group, 'none');
   assert.equal(siteStatus({ website: 'https://romashka.ru', site_check: null }).group, 'unchecked');
