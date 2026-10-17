@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lead Finder</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <h1>Lead Finder</h1>
+      <p>База малого бизнеса, которому нужен сайт</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="panel" aria-labelledby="form-title">
+      <h2 id="form-title">Добавить компанию</h2>
+
+      <!-- novalidate: проверку делает наш app.js, чтобы все подсказки выглядели одинаково -->
+      <form id="company-form" novalidate autocomplete="off">
+        <div class="form-grid">
+          <div class="field w2">
+            <label for="f-name">Название <span class="req" aria-hidden="true">*</span></label>
+            <input id="f-name" name="name" required maxlength="200" aria-describedby="err-name">
+            <p class="error" id="err-name" hidden></p>
+          </div>
+
+          <div class="field">
+            <label for="f-category">Сфера</label>
+            <input id="f-category" name="category" list="categories" maxlength="100"
+                   placeholder="Выбери или впиши свою" aria-describedby="err-category">
+            <datalist id="categories">
+              <option value="Рестораны и кафе"></option>
+              <option value="Кофейни"></option>
+              <option value="Доставка еды"></option>
+              <option value="Автосервисы"></option>
+              <option value="Шиномонтаж"></option>
+              <option value="Автомойки"></option>
+              <option value="Магазины"></option>
+              <option value="Салоны красоты"></option>
+              <option value="Барбершопы"></option>
+              <option value="Ногтевые студии"></option>
+              <option value="Стоматологии"></option>
+              <option value="Медицинские центры"></option>
+              <option value="Фитнес и спорт"></option>
+              <option value="Ремонт и строительство"></option>
+              <option value="Образование и курсы"></option>
+              <option value="Ветклиники и зоотовары"></option>
+              <option value="Гостиницы и хостелы"></option>
+              <option value="Цветы"></option>
+            </datalist>
+            <p class="error" id="err-category" hidden></p>
+          </div>
+
+          <div class="field">
+            <label for="f-city">Город</label>
+            <input id="f-city" name="city" maxlength="100" aria-describedby="err-city">
+            <p class="error" id="err-city" hidden></p>
+          </div>
+
+          <div class="field w2">
+            <label for="f-card-url">Ссылка на карточку 2ГИС или Яндекс Карт</label>
+            <input id="f-card-url" name="card_url" inputmode="url" maxlength="2000"
+                   placeholder="https://2gis.ru/…/firm/…" aria-describedby="card-url-hint err-card_url">
+            <p class="hint" id="card-url-hint"></p>
+            <p class="error" id="err-card_url" hidden></p>
+          </div>
+
+          <div class="field w2">
+            <label for="f-address">Адрес</label>
+            <input id="f-address" name="address" maxlength="300" aria-describedby="err-address">
+            <p class="error" id="err-address" hidden></p>
+          </div>
+
+          <div class="field">
+            <label for="f-phone">Рабочий телефон</label>
+            <input id="f-phone" name="phone" type="tel" inputmode="tel" maxlength="60"
+                   placeholder="+7 900 000-00-00" aria-describedby="err-phone">
+            <p class="error" id="err-phone" hidden></p>
+          </div>
+
+          <div class="field">
+            <label for="f-website">Сайт или соцсеть</label>
+            <input id="f-website" name="website" inputmode="url" maxlength="2000"
+                   placeholder="site.ru или vk.com/…" aria-describedby="err-website">
+            <p class="error" id="err-website" hidden></p>
+          </div>
+
+          <div class="field">
+            <label for="f-rating">Рейтинг</label>
+            <input id="f-rating" name="rating" inputmode="decimal" maxlength="10"
+                   placeholder="4,7" aria-describedby="err-rating">
+            <p class="error" id="err-rating" hidden></p>
+          </div>
+
+          <div class="field">
+            <label for="f-reviews">Число отзывов</label>
+            <input id="f-reviews" name="reviews_count" inputmode="numeric" maxlength="15"
+                   placeholder="120" aria-describedby="err-reviews_count">
+            <p class="error" id="err-reviews_count" hidden></p>
+          </div>
+
+          <div class="field full">
+            <label for="f-note">Заметка</label>
+            <textarea id="f-note" name="note" rows="2" maxlength="2000"
+                      placeholder="Например: сайт на Тильде 2016 года, меню картинкой" aria-describedby="err-note"></textarea>
+            <p class="error" id="err-note" hidden></p>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn-primary">Сохранить компанию</button>
+          <button type="reset" class="btn-secondary">Очистить</button>
+        </div>
+        <p id="form-message" class="message" role="status" aria-live="polite" hidden></p>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="list-title">
+      <h2 id="list-title">Компании <span id="companies-count" class="count">0</span></h2>
+      <p id="list-status" class="list-status">Загружаю список…</p>
+      <table id="companies-table" class="companies" hidden>
+        <thead>
+          <tr>
+            <th scope="col">Добавлена</th>
+            <th scope="col">Компания</th>
+            <th scope="col">Адрес</th>
+            <th scope="col">Телефон</th>
+            <th scope="col">Сайт / соцсеть</th>
+            <th scope="col">Карточка</th>
+            <th scope="col">Рейтинг</th>
+            <th scope="col">Заметка</th>
+          </tr>
+        </thead>
+        <tbody id="companies-body"></tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

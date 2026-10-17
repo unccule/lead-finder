@@ -1,0 +1,126 @@
+/* Цвета и размеры в одном месте: поменял тут — поменялось везде */
+:root {
+  --bg: #f3f5f8;
+  --panel: #ffffff;
+  --text: #1c2333;
+  --muted: #646e80;
+  --line: #dde2ea;
+  --field-border: #c6cdd8;
+  --accent: #2f6fed;
+  --accent-dark: #1f56c4;
+  --danger: #c0262d;
+  --danger-bg: #fdeeee;
+  --ok: #1d7533;
+  --ok-bg: #e6f5e9;
+  --warn: #835600;
+  --warn-bg: #fff3d6;
+  --radius: 10px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+
+/* Шапка */
+.top { background: var(--panel); border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+.top .wrap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; padding-top: 14px; padding-bottom: 14px; }
+.top h1 { margin: 0; font-size: 1.35rem; }
+.top p { margin: 0; color: var(--muted); }
+
+/* Карточки-разделы */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 20px; }
+.panel h2 { margin: 0 0 14px; font-size: 1.15rem; }
+.count { display: inline-block; min-width: 1.8em; padding: 0 .5em; border-radius: 999px; background: var(--bg); color: var(--muted); font-size: .85em; text-align: center; }
+
+/* Форма: на телефоне поля идут в один столбец, шире — в 2, на компьютере — в 4 */
+.form-grid { display: grid; gap: 12px 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px) {
+  .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .w2, .full { grid-column: span 2; }
+}
+@media (min-width: 960px) {
+  .form-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .full { grid-column: 1 / -1; }
+}
+
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field label { font-weight: 600; font-size: .95rem; }
+.req { color: var(--danger); }
+
+input, textarea {
+  width: 100%;
+  min-width: 0;
+  font: inherit; /* 16px: на iPhone поле не «зумится» при нажатии */
+  color: inherit;
+  padding: 9px 11px;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  background: #fff;
+}
+textarea { resize: vertical; min-height: 64px; }
+input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+[aria-invalid="true"] { border-color: var(--danger); background: var(--danger-bg); }
+
+.hint, .error { margin: 0; font-size: .85rem; overflow-wrap: anywhere; }
+.hint { color: var(--muted); }
+.error { color: var(--danger); }
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+button { font: inherit; border-radius: 8px; padding: 10px 18px; border: 1px solid transparent; cursor: pointer; }
+.btn-primary { background: var(--accent); color: #fff; font-weight: 600; }
+.btn-primary:hover { background: var(--accent-dark); }
+.btn-primary:disabled { opacity: .6; cursor: progress; }
+.btn-secondary { background: transparent; border-color: var(--line); color: var(--text); }
+.btn-secondary:hover { background: var(--bg); }
+
+.message { margin: 12px 0 0; padding: 10px 12px; border-radius: 8px; overflow-wrap: anywhere; }
+.message.success { background: var(--ok-bg); color: var(--ok); }
+.message.warning { background: var(--warn-bg); color: var(--warn); }
+.message.error { background: var(--danger-bg); color: var(--danger); }
+
+.list-status { margin: 0; color: var(--muted); }
+.list-status.is-error { color: var(--danger); }
+
+/* Таблица компаний */
+.companies { width: 100%; border-collapse: collapse; font-size: .95rem; }
+.companies th, .companies td {
+  text-align: left;
+  vertical-align: top;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+  /* длинные ссылки переносятся, а не растягивают страницу вбок */
+  overflow-wrap: anywhere;
+}
+.companies th { font-size: .8rem; font-weight: 600; color: var(--muted); }
+.companies .sub { display: block; color: var(--muted); font-size: .9em; }
+.companies .muted { color: var(--muted); }
+.companies .note { white-space: pre-line; }
+.companies .nowrap { white-space: nowrap; } /* номер телефона не разрываем на две строки */
+.companies a { color: var(--accent); }
+.companies tr.flash { animation: flash 2.5s ease-out; }
+@keyframes flash { from { background: #fff1a8; } to { background: transparent; } }
+
+/* На узком экране строка таблицы превращается в карточку: «подпись — значение» */
+@media (max-width: 899px) {
+  .companies thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .companies, .companies tbody, .companies tr, .companies td { display: block; }
+  .companies tr { border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 12px; margin-bottom: 12px; }
+  .companies td {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .companies td:last-child { border-bottom: 0; }
+  .companies td::before { content: attr(data-label); color: var(--muted); font-size: .85rem; }
+}

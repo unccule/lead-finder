@@ -1,0 +1,14 @@
+{
+  "name": "lead-finder",
+  "version": "0.1.0",
+  "description": "Lead Finder — помощник для поиска клиентов на создание сайтов и лендингов",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/main.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  }
+}
