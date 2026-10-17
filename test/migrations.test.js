@@ -7,48 +7,70 @@ import { openDatabase } from '../src/db.js';
 import { MIGRATIONS } from '../src/migrations.js';
 import { addCompany, listCompanies } from '../src/companies.js';
 
-test('новое поле добавляется миграцией без потери данных, перед этим делается копия базы', (t) => {
+const LATEST = MIGRATIONS.at(-1).version;
+
+function tempDbFile(t) {
   const dir = mkdtempSync(path.join(tmpdir(), 'lead-finder-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const file = path.join(dir, 'leads.db');
+  return path.join(dir, 'leads.db');
+}
 
-  // «Старая версия программы»: только миграция 1.
+test('база этапа 1 обновляется до этапа 2: записи на месте, у них появляется пустое поле other_links', (t) => {
+  const file = tempDbFile(t);
+
+  // База «как после этапа 1»: только первая миграция, запись вставляем напрямую.
+  let db = openDatabase(file, { migrations: MIGRATIONS.filter((m) => m.version === 1) });
+  db.prepare(`INSERT INTO companies (name, phone, website, name_key, created_at, updated_at)
+              VALUES ('Кафе «Ромашка»', '+78432000000', 'https://vk.com/romashka', 'кафе ромашка', 'x', 'x')`).run();
+  db.close();
+
+  db = openDatabase(file);
+  const [company] = listCompanies(db);
+  assert.equal(company.name, 'Кафе «Ромашка»');
+  assert.equal(company.phone, '+78432000000');
+  assert.equal(company.website, 'https://vk.com/romashka');
+  assert.equal(company.other_links, '');
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, LATEST);
+  db.close();
+
+  const backups = readdirSync(path.join(path.dirname(file), 'backups'));
+  assert.equal(backups.length, 1);
+  assert.match(backups[0], /^leads-v1-.*\.db$/);
+});
+
+test('следующее новое поле тоже добавится без потери данных, копия делается один раз', (t) => {
+  const file = tempDbFile(t);
+
   let db = openDatabase(file);
   addCompany(db, { name: 'Кафе «Ромашка»', phone: '+7 843 200-00-00' });
   db.close();
 
-  // «Новая версия»: появилась миграция 2 с новым полем (так будет на следующих этапах).
+  // «Новая версия программы»: появилась ещё одна миграция с новым полем.
   const withStatus = [
     ...MIGRATIONS,
-    { version: 2, name: 'Статус', sql: "ALTER TABLE companies ADD COLUMN status TEXT NOT NULL DEFAULT 'new'" },
+    { version: LATEST + 1, name: 'Статус', sql: "ALTER TABLE companies ADD COLUMN status TEXT NOT NULL DEFAULT 'new'" },
   ];
   db = openDatabase(file, { migrations: withStatus });
   const row = db.prepare('SELECT name, phone, status FROM companies').get();
   assert.deepEqual({ ...row }, { name: 'Кафе «Ромашка»', phone: '+78432000000', status: 'new' });
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 2);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, LATEST + 1);
   db.close();
-
-  const backups = readdirSync(path.join(dir, 'backups'));
-  assert.equal(backups.length, 1);
-  assert.match(backups[0], /^leads-v1-.*\.db$/);
 
   // Повторный запуск: миграции уже выполнены, новых копий не появляется, данные на месте.
   db = openDatabase(file, { migrations: withStatus });
   assert.equal(listCompanies(db).length, 1);
   db.close();
-  assert.equal(readdirSync(path.join(dir, 'backups')).length, 1);
+  assert.equal(readdirSync(path.join(path.dirname(file), 'backups')).length, 1);
 });
 
 test('ошибочная миграция откатывается целиком, база остаётся рабочей', (t) => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'lead-finder-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const file = path.join(dir, 'leads.db');
+  const file = tempDbFile(t);
 
   openDatabase(file).close();
-  const broken = [...MIGRATIONS, { version: 2, name: 'Сломанная', sql: 'ALTER TABLE nope ADD COLUMN x TEXT' }];
-  assert.throws(() => openDatabase(file, { migrations: broken }), /Миграция 2/);
+  const broken = [...MIGRATIONS, { version: LATEST + 1, name: 'Сломанная', sql: 'ALTER TABLE nope ADD COLUMN x TEXT' }];
+  assert.throws(() => openDatabase(file, { migrations: broken }), new RegExp(`Миграция ${LATEST + 1}`));
 
   const db = openDatabase(file);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 1);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, LATEST);
   db.close();
 });

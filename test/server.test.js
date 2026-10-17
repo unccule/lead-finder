@@ -35,7 +35,14 @@ test('главная страница отдаётся', async () => {
 });
 
 test('стили, скрипт страницы и общий код отдаются с правильным типом', async () => {
-  for (const [url, type] of [['/style.css', /text\/css/], ['/app.js', /javascript/], ['/shared/normalize.js', /javascript/]]) {
+  const files = [
+    ['/style.css', /text\/css/],
+    ['/app.js', /javascript/],
+    ['/shared/normalize.js', /javascript/],
+    ['/shared/link-kinds.js', /javascript/],
+    ['/shared/parse-card.js', /javascript/],
+  ];
+  for (const [url, type] of files) {
     const response = await fetch(baseUrl + url);
     assert.equal(response.status, 200, url);
     assert.match(response.headers.get('content-type'), type, url);
@@ -53,11 +60,18 @@ test('API: добавление, список, отказ без названи�
   let response = await fetch(`${baseUrl}/api/companies`);
   assert.deepEqual(await response.json(), { companies: [] });
 
-  response = await postJson({ name: 'Автосервис «Мотор»', phone: '8 916 123-45-67', card_url: 'https://2gis.ru/kazan/firm/123456' });
+  response = await postJson({
+    name: 'Автосервис «Мотор»',
+    phone: '8 916 123-45-67',
+    card_url: 'https://2gis.ru/kazan/firm/123456',
+    website: 'taplink.cc/motor',
+    other_links: 'vk.com/motor\nt.me/motor',
+  });
   assert.equal(response.status, 201);
   const { company } = await response.json();
   assert.equal(company.phone, '+79161234567');
   assert.equal(company.source, '2gis');
+  assert.equal(company.other_links, 'https://vk.com/motor\nhttps://t.me/motor');
 
   response = await postJson({ name: '', phone: '+79161234567' });
   assert.equal(response.status, 400);

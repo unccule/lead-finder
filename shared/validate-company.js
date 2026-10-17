@@ -8,14 +8,17 @@ export const FIELDS = {
   name: 200,
   category: 100,
   city: 100,
-  address: 300,
   card_url: 2000,
+  address: 300,
   phone: 60,
   website: 2000,
   rating: 10,
   reviews_count: 15,
+  other_links: 4000,
   note: 2000,
 };
+
+const MAX_OTHER_LINKS = 10;
 
 export const PHONE_ERROR =
   'Не получилось распознать номер. Нужен российский номер: +7 и 10 цифр, например +7 916 123-45-67. ' +
@@ -61,6 +64,18 @@ export function validateCompany(input) {
     errors.website ??= 'Это не похоже на адрес сайта. Пример: romashka-cafe.ru или vk.com/romashka';
   }
 
+  // Соцсети и другие ссылки: по одной на строку (подойдут и пробелы между ними).
+  const otherLinks = [];
+  for (const token of values.other_links.split(/\s+/).filter(Boolean)) {
+    const url = normalizeUrl(token);
+    if (!url) {
+      errors.other_links ??= `«${token.slice(0, 60)}» не похоже на ссылку. Пиши по одной ссылке на строку.`;
+    } else if (url !== website && !otherLinks.includes(url)) {
+      otherLinks.push(url);
+    }
+  }
+  if (otherLinks.length > MAX_OTHER_LINKS) errors.other_links ??= `Не больше ${MAX_OTHER_LINKS} ссылок`;
+
   let rating = null;
   if (values.rating) {
     // Принимаем и «4,7», и «4.7» — на картах пишут с запятой.
@@ -95,6 +110,7 @@ export function validateCompany(input) {
       source_id: sourceId,
       phone,
       website,
+      other_links: otherLinks.join('\n'),
       rating,
       reviews_count: reviewsCount,
       note: values.note,

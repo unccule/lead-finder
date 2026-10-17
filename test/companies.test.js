@@ -146,6 +146,22 @@ test('короткую ссылку не раскрываем: ID нет, дуб
   assert.equal(addCompany(db, { name: 'Автомойка', phone: '89161234567' }).reason, 'duplicate');
 });
 
+test('соцсети и другие ссылки: нормализуются, без повторов и без копии основного сайта', () => {
+  const result = addCompany(db, {
+    name: 'Кафе',
+    website: 'romashka-kafe.ru',
+    other_links: 'vk.com/romashka\n  t.me/romashka   vk.com/romashka\nromashka-kafe.ru\n\n',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.company.other_links, 'https://vk.com/romashka\nhttps://t.me/romashka');
+});
+
+test('соцсети и другие ссылки: не-ссылка и больше 10 ссылок отклоняются', () => {
+  assert.match(addCompany(db, { name: 'Кафе', other_links: 'vk.com/ok javascript:alert(1)' }).errors.other_links, /не похоже на ссылку/);
+  const many = Array.from({ length: 11 }, (_, i) => `vk.com/page${i}`).join('\n');
+  assert.match(addCompany(db, { name: 'Кафе', other_links: many }).errors.other_links, /Не больше 10/);
+});
+
 test('текст с HTML сохраняется как есть — экранирование делает страница при выводе', () => {
   const result = addCompany(db, { name: '<img src=x onerror=alert(1)>' });
   assert.equal(result.company.name, '<img src=x onerror=alert(1)>');

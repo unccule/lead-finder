@@ -43,4 +43,10 @@ export const MIGRATIONS = [
       CREATE INDEX companies_name_key ON companies (name_key);
     `,
   },
+  {
+    version: 2,
+    name: 'Поле «Соцсети и другие ссылки»',
+    // Ссылки храним текстом, по одной на строку. У старых записей поле будет пустым.
+    sql: `ALTER TABLE companies ADD COLUMN other_links TEXT NOT NULL DEFAULT ''`,
+  },
 ];

@@ -22,6 +22,19 @@
 
       <!-- novalidate: проверку делает наш app.js, чтобы все подсказки выглядели одинаково -->
       <form id="company-form" novalidate autocomplete="off">
+        <!-- Быстрая вставка. У поля нет name, поэтому его текст не попадает в отправку формы
+             и не сохраняется: в тексте карточки могут быть отзывы с именами людей. -->
+        <div class="paste-box">
+          <label for="card-text">Быстрая вставка: текст карточки из 2ГИС или Яндекс Карт</label>
+          <textarea id="card-text" rows="3" spellcheck="false" aria-describedby="card-text-hint"
+                    placeholder="Выдели в карточке всё от названия до контактов, скопируй (Ctrl+C) и вставь сюда (Ctrl+V)"></textarea>
+          <p class="hint" id="card-text-hint">
+            Программа найдёт телефоны и ссылки и заполнит поля ниже — проверь их и нажми «Сохранить».
+            Сам текст никуда не отправляется и не сохраняется.
+          </p>
+          <div id="paste-result" class="paste-result" aria-live="polite" hidden></div>
+        </div>
+
         <div class="form-grid">
           <div class="field w2">
             <label for="f-name">Название <span class="req" aria-hidden="true">*</span></label>
@@ -104,7 +117,14 @@
             <p class="error" id="err-reviews_count" hidden></p>
           </div>
 
-          <div class="field full">
+          <div class="field w2">
+            <label for="f-other-links">Соцсети и другие ссылки</label>
+            <textarea id="f-other-links" name="other_links" rows="2" maxlength="4000" spellcheck="false"
+                      placeholder="По одной на строку: vk.com/…, t.me/…, taplink.cc/…" aria-describedby="err-other_links"></textarea>
+            <p class="error" id="err-other_links" hidden></p>
+          </div>
+
+          <div class="field w2">
             <label for="f-note">Заметка</label>
             <textarea id="f-note" name="note" rows="2" maxlength="2000"
                       placeholder="Например: сайт на Тильде 2016 года, меню картинкой" aria-describedby="err-note"></textarea>
@@ -130,7 +150,7 @@
             <th scope="col">Компания</th>
             <th scope="col">Адрес</th>
             <th scope="col">Телефон</th>
-            <th scope="col">Сайт / соцсеть</th>
+            <th scope="col">Сайт / соцсети</th>
             <th scope="col">Карточка</th>
             <th scope="col">Рейтинг</th>
             <th scope="col">Заметка</th>

@@ -4,7 +4,7 @@ import { SOURCE_LABELS, textKey } from '../shared/normalize.js';
 
 // Колонки, которые отдаём наружу. Служебные name_key / address_key остаются внутри.
 const PUBLIC_COLUMNS = `id, name, category, city, address, card_url, source, source_id,
-  phone, website, rating, reviews_count, note, created_at, updated_at`;
+  phone, website, other_links, rating, reviews_count, note, created_at, updated_at`;
 
 /** Все компании, новые сверху. */
 export function listCompanies(db) {
@@ -49,9 +49,9 @@ export function addCompany(db, input) {
   // в текст запроса: так кавычки и прочие символы из карточки не смогут испортить SQL.
   const { lastInsertRowid } = db.prepare(`
     INSERT INTO companies (name, category, city, address, card_url, source, source_id, phone, website,
-                           rating, reviews_count, note, name_key, address_key, created_at, updated_at)
+                           other_links, rating, reviews_count, note, name_key, address_key, created_at, updated_at)
     VALUES ($name, $category, $city, $address, $card_url, $source, $source_id, $phone, $website,
-            $rating, $reviews_count, $note, $name_key, $address_key, $now, $now)
+            $other_links, $rating, $reviews_count, $note, $name_key, $address_key, $now, $now)
   `).run({ ...data, now });
 
   return { ok: true, company: getCompany(db, lastInsertRowid) };
