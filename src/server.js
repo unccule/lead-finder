@@ -5,6 +5,7 @@
 //   GET  /api/companies/:id → { company, history }            одна компания + история статусов
 //   PATCH /api/companies/:id → 200 { company } | 400 | 404 | 409  изменить (можно прислать одно поле)
 //   GET/PUT /api/settings   → { settings }                        подпись для предложений
+//   POST /api/companies/import { companies } → { added, duplicates, invalid, problems }  загрузка из файла
 //   POST /api/companies/delete { ids }        → { deleted }        выборочно (запоминаются как «не предлагать»)
 //   POST /api/companies/clear  { confirm: 'all' } → { deleted, backup }  всё, с резервной копией базы
 //   GET  /api/osm/groups    → { groups: [...] }                   сферы для автопоиска
@@ -19,8 +20,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   addCompanies, addCompany, clearCompanies, companiesToCheck, deleteCompanies, findExisting, getCompany,
-  getStatusHistory, isExcluded, listCompanies, updateCompany,
+  getStatusHistory, importCompanies, isExcluded, listCompanies, updateCompany,
 } from './companies.js';
+import { MAX_IMPORT_ROWS } from '../shared/import-csv.js';
 import { backupDatabase } from './db.js';
 import { getSettings, saveSettings } from './settings.js';
 import { OSM_GROUPS, searchOsm } from './osm.js';
@@ -53,6 +55,7 @@ class HttpError extends Error {
 }
 
 const MAX_DELETE_IDS = 10_000;
+const IMPORT_BODY_BYTES = 5 * 1024 * 1024;
 
 /**
  * Создаёт сервер. dbFile — путь к файлу базы (для резервной копии перед очисткой).
@@ -91,6 +94,16 @@ export function createServer({ db, dbFile, fetchImpl = fetch, lookup, sitePauseM
         if (result.reason === 'not_found') throw new HttpError(404, 'Такой компании нет — возможно, её уже удалили');
         if (result.reason === 'invalid') return sendJson(res, 400, { error: 'Проверь отмеченные поля', fields: result.errors });
         return sendJson(res, 409, { error: result.message, existing: result.existing });
+      },
+    },
+
+    '/api/companies/import': {
+      POST: async (req, res) => {
+        // Список из файла может быть большим — для этого запроса разрешаем до 5 МБ.
+        const { companies } = await readJson(req, IMPORT_BODY_BYTES);
+        if (!Array.isArray(companies) || companies.length === 0) throw new HttpError(400, 'В файле нет компаний для загрузки');
+        if (companies.length > MAX_IMPORT_ROWS) throw new HttpError(400, `За один раз — не больше ${MAX_IMPORT_ROWS} строк`);
+        sendJson(res, 200, importCompanies(db, companies));
       },
     },
 
@@ -275,7 +288,7 @@ function searchSummary({ id, city, items, skipped }) {
  * Читает тело запроса как JSON. Требуем Content-Type: application/json: обычная HTML-форма
  * с чужого сайта не умеет отправлять такой запрос, а fetch с чужого сайта браузер не пропустит (CORS).
  */
-async function readJson(req) {
+async function readJson(req, maxBytes = MAX_BODY_BYTES) {
   const contentType = String(req.headers['content-type'] ?? '').toLowerCase();
   if (!contentType.startsWith('application/json')) throw new HttpError(415, 'Ожидаются данные в формате JSON');
 
@@ -283,9 +296,9 @@ async function readJson(req) {
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size <= MAX_BODY_BYTES) chunks.push(chunk);
+    if (size <= maxBytes) chunks.push(chunk);
   }
-  if (size > MAX_BODY_BYTES) throw new HttpError(413, 'Слишком большой запрос');
+  if (size > maxBytes) throw new HttpError(413, 'Слишком большой запрос');
 
   let data;
   try {

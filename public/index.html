@@ -55,6 +55,16 @@
     <section class="panel" aria-labelledby="form-title">
       <h2 id="form-title">Добавить компанию</h2>
 
+      <div class="import-box">
+        <label class="btn-secondary file-button">
+          Загрузить список из файла CSV
+          <input type="file" id="import-file" accept=".csv,text/csv,.txt">
+        </label>
+        <span class="hint">Таблица из Excel: «Файл → Сохранить как → CSV UTF-8» (или «CSV, разделители — точка с запятой»).
+          Нужен столбец «Название»; телефон, сайт, адрес и др. — по желанию.</span>
+      </div>
+      <div id="import-result" class="osm-result" hidden></div>
+
       <!-- novalidate: проверку делает наш app.js, чтобы все подсказки выглядели одинаково -->
       <form id="company-form" novalidate autocomplete="off">
         <!-- Быстрая вставка. У поля нет name, поэтому его текст не попадает в отправку формы

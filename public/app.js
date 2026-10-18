@@ -15,6 +15,7 @@ import { initAutoSearch } from '/auto-search.js';
 import { initSelection } from '/selection.js';
 import { initCompanyDialog } from '/company-dialog.js';
 import { initFilters } from '/filters.js';
+import { initImportFile } from '/import-file.js';
 import { request } from '/api.js';
 
 const form = document.getElementById('company-form');
@@ -95,6 +96,7 @@ initAutoSearch({
     if (summary.site_check_started) watchSiteChecks();
   },
 });
+initImportFile({ onImported: () => loadCompanies() });
 updateCardHint();
 loadCompanies().then(refreshSiteChecks);
 

@@ -108,7 +108,9 @@ export function updateCompany(db, id, changes, { now = new Date() } = {}) {
 
   const stamp = now.toISOString();
   const siteChanged = linkKey(data.website) !== linkKey(current.website);
-  db.exec('BEGIN');
+  // SAVEPOINT вместо BEGIN: так изменение можно делать и само по себе, и внутри импорта,
+  // который уже открыл свою транзакцию (BEGIN внутри BEGIN SQLite не разрешает).
+  db.exec('SAVEPOINT update_company');
   try {
     db.prepare(`
       UPDATE companies SET
@@ -130,9 +132,10 @@ export function updateCompany(db, id, changes, { now = new Date() } = {}) {
     if (statusChanged) {
       db.prepare('INSERT INTO status_history (company_id, status, changed_at) VALUES (?, ?, ?)').run(id, status, stamp);
     }
-    db.exec('COMMIT');
+    db.exec('RELEASE update_company');
   } catch (error) {
-    db.exec('ROLLBACK');
+    db.exec('ROLLBACK TO update_company');
+    db.exec('RELEASE update_company');
     throw error;
   }
   return { ok: true, company: getCompany(db, id) };
@@ -158,6 +161,45 @@ export function addCompanies(db, inputs) {
       if (result.ok) summary.added += 1;
       else if (result.reason === 'duplicate') summary.duplicates += 1;
       else summary.invalid += 1;
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+  return summary;
+}
+
+/**
+ * Импорт строк из файла (shared/import-csv.js). Каждая строка — как заполненная форма:
+ * та же проверка и защита от дублей. Если в файле есть статус и дата контакта (наш экспорт) —
+ * они тоже восстанавливаются. Возвращает { added, duplicates, invalid, problems: [{ row, error }] }.
+ */
+export function importCompanies(db, rows, { now = new Date() } = {}) {
+  const summary = { added: 0, duplicates: 0, invalid: 0, problems: [] };
+  const note = (row, error) => {
+    if (summary.problems.length < 20) summary.problems.push({ row, error });
+  };
+  db.exec('BEGIN');
+  try {
+    for (const row of rows) {
+      const input = row !== null && typeof row === 'object' ? row : {};
+      const result = addCompany(db, input);
+      if (result.reason === 'duplicate') {
+        summary.duplicates += 1;
+        continue;
+      }
+      if (!result.ok) {
+        summary.invalid += 1;
+        note(input.row, Object.values(result.errors)[0]);
+        continue;
+      }
+      summary.added += 1;
+      if (isStatus(input.status) && (input.status !== 'new' || input.next_contact_at)) {
+        const status = updateCompany(db, result.company.id,
+          { status: input.status, ...(input.next_contact_at ? { next_contact_at: input.next_contact_at } : {}) }, { now });
+        if (!status.ok) note(input.row, 'компания добавлена, но статус или дата контакта не распознаны');
+      }
     }
     db.exec('COMMIT');
   } catch (error) {
