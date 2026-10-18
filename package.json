@@ -1,7 +1,7 @@
 {
   "name": "lead-finder",
   "productName": "Lead Finder",
-  "version": "0.5.0",
+  "version": "1.0.0",
   "description": "Lead Finder — помощник для поиска клиентов на создание сайтов и лендингов",
   "private": true,
   "type": "module",
