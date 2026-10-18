@@ -1,5 +1,6 @@
 // Панель «Автопоиск»: город + сферы → поиск в OpenStreetMap → итоги → «Добавить в базу».
 // Как и везде, данные выводим только как текст (textContent), без innerHTML.
+import { request } from '/api.js';
 
 /**
  * Подключает панель. onImported(summary) вызывается после добавления компаний в базу,
@@ -68,6 +69,9 @@ export function initAutoSearch({ onImported }) {
       textElement('p', `Найдено компаний: ${total}. Новых без своего сайта: ${counts.new_no_site}, ` +
         `новых со своим сайтом: ${counts.new_with_site}, уже в базе: ${counts.in_base}.`),
     ];
+    if (counts.excluded > 0) {
+      blocks.push(textElement('p', `Не предлагаю снова ${counts.excluded}: ты удалял их из списка раньше.`, 'hint'));
+    }
     if (counts.skipped_no_contacts > 0) {
       blocks.push(textElement('p', `Пропущено ${counts.skipped_no_contacts}: в OpenStreetMap у них нет ни телефона, ` +
         'ни ссылки, ни адреса (например, просто «Автомойка») — с ними не связаться и их не найти.', 'hint'));
@@ -120,21 +124,6 @@ export function initAutoSearch({ onImported }) {
     status.textContent = text;
     status.className = `message ${kind}`;
     status.hidden = !text;
-  }
-}
-
-/** Запрос к нашему серверу. Возвращает { ok, data } и никогда не бросает исключение. */
-export async function request(method, url, body) {
-  try {
-    const response = await fetch(url, {
-      method,
-      headers: body ? { 'Content-Type': 'application/json' } : {},
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const data = await response.json().catch(() => ({}));
-    return { ok: response.ok, status: response.status, data };
-  } catch {
-    return { ok: false, status: 0, data: { error: 'Нет связи с сервером. Проверь, что окно Lead Finder открыто.' } };
   }
 }
 

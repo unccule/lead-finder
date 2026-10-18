@@ -12,6 +12,9 @@ export function openDatabase(file, { migrations = MIGRATIONS } = {}) {
   if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   try {
+    // Если базу в этот момент пишет другая копия программы (сайт и приложение открыты одновременно),
+    // подождать до 5 секунд, а не сразу падать с ошибкой «database is locked».
+    db.exec('PRAGMA busy_timeout = 5000');
     migrate(db, file, migrations);
   } catch (error) {
     db.close();
@@ -32,7 +35,7 @@ function migrate(db, file, migrations) {
 
   // В базе уже есть данные старой версии — сначала делаем резервную копию.
   if (current > 0 && file !== ':memory:') {
-    const backup = backupDatabase(db, file, current);
+    const backup = backupDatabase(db, file, `v${current}`);
     console.log(`Резервная копия базы перед обновлением: ${backup}`);
   }
 
@@ -50,11 +53,15 @@ function migrate(db, file, migrations) {
   }
 }
 
-function backupDatabase(db, file, version) {
+/**
+ * Копия базы в папку backups рядом с ней: leads-<label>-<дата и время>.db. Возвращает путь к копии.
+ * label — пометка, зачем копия: 'v3' (перед обновлением), 'before-clear' (перед очисткой), 'manual'.
+ */
+export function backupDatabase(db, file, label) {
   const dir = path.join(path.dirname(file), 'backups');
   mkdirSync(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const target = path.join(dir, `${path.basename(file, '.db')}-v${version}-${stamp}.db`);
+  const target = path.join(dir, `${path.basename(file, '.db')}-${label}-${stamp}.db`);
   db.prepare('VACUUM INTO ?').run(target); // VACUUM INTO — встроенное в SQLite копирование базы
   return target;
 }

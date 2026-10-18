@@ -164,7 +164,30 @@ select { font: inherit; font-size: .9rem; padding: 7px 8px; border: 1px solid va
 .heat.cold { background: var(--bg); color: var(--muted); }
 .heat-label { font-size: .8rem; color: var(--muted); }
 .reasons { display: grid; gap: 2px; margin: 4px 0 0; padding: 0; list-style: none; font-size: .8rem; color: var(--muted); }
-@media (min-width: 900px) { .companies td:first-child { min-width: 10.5rem; } }
+@media (min-width: 900px) { .companies td:nth-child(2) { min-width: 10.5rem; } } /* столбец «Горячесть» */
+
+/* Выбор и удаление */
+@media (min-width: 900px) { .select-col { width: 2.2rem; } }
+.companies input[type="checkbox"] { width: 18px; height: 18px; margin: 2px 0 0; cursor: pointer; }
+.selection-bar {
+  position: sticky; /* при прокрутке длинного списка панель остаётся сверху */
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+}
+.btn-danger { background: var(--danger); color: #fff; font-weight: 600; padding: 7px 14px; }
+.btn-danger:hover { filter: brightness(.92); }
+.danger-zone { margin-top: 16px; padding-top: 10px; border-top: 1px dashed var(--line); text-align: right; }
+.btn-link.danger { color: var(--danger); }
 
 .site-line { display: block; margin-top: 4px; font-size: .85rem; }
 .site-badge { display: inline-block; margin-right: 6px; padding: 0 7px; border-radius: 999px; font-size: .75rem; font-weight: 600; white-space: nowrap; }

@@ -9,7 +9,9 @@ import { classifyLink, linkKey } from '/shared/link-kinds.js';
 import { parseCardText } from '/shared/parse-card.js';
 import { SITE_GROUPS } from '/shared/site-status.js';
 import { assessCompany, byHotness } from '/shared/hotness.js';
-import { initAutoSearch, request } from '/auto-search.js';
+import { initAutoSearch } from '/auto-search.js';
+import { initSelection } from '/selection.js';
+import { request } from '/api.js';
 
 const form = document.getElementById('company-form');
 const submitButton = form.querySelector('button[type="submit"]');
@@ -29,6 +31,7 @@ const sortSelect = document.getElementById('sort-order');
 
 let companies = [];
 let filter = 'all'; // какая вкладка над таблицей выбрана: 'all' или ключ из SITE_GROUPS
+const selection = initSelection({ reload: loadCompanies }); // галочки и удаление
 
 // Быстрая вставка: HTML из буфера обмена, результат разбора и короткий итог «что заполнил».
 const paste = { html: '', result: null, summary: '' };
@@ -478,6 +481,7 @@ function renderTable() {
     ? 'Пока пусто. Найди компании автопоиском или добавь вручную через форму выше.'
     : 'В этой вкладке пока никого нет.';
   tbody.replaceChildren(...visible.map((company) => companyRow(company, assessments.get(company.id))));
+  selection.afterRender(visible, companies);
 }
 
 /** Вкладки «Все · Без сайта · Сайт с проблемами · …» с количеством в каждой. */
@@ -506,7 +510,11 @@ function companyRow(company, assessment) {
   noteCell.classList.add('note');
   const [date] = formatDate(company.created_at).split(', ');
 
+  const selectCell = cell('Выбрать', selection.checkbox(company));
+  selectCell.classList.add('select-col');
+
   row.append(
+    selectCell,
     heatCell(assessment),
     cell('Компания',
       textElement('strong', company.name),

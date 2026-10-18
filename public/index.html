@@ -184,10 +184,20 @@
       </div>
       <p id="check-status" class="hint check-status" aria-live="polite"></p>
       <div id="filter-tabs" class="tabs" role="group" aria-label="Показать компании"></div>
+      <p id="list-message" class="message" role="status" aria-live="polite" hidden></p>
+      <!-- Появляется, когда отмечена хотя бы одна компания; при прокрутке остаётся сверху -->
+      <div id="selection-bar" class="selection-bar" hidden>
+        <span id="selection-count"></span>
+        <button id="delete-selected" type="button" class="btn-danger">Удалить выбранные</button>
+        <button id="clear-selection" type="button" class="btn-link">снять выбор</button>
+      </div>
       <p id="list-status" class="list-status">Загружаю список…</p>
       <table id="companies-table" class="companies" hidden>
         <thead>
           <tr>
+            <th scope="col" class="select-col">
+              <input type="checkbox" id="select-all" aria-label="Выбрать все компании в этой вкладке">
+            </th>
             <th scope="col">Горячесть</th>
             <th scope="col">Компания</th>
             <th scope="col">Адрес</th>
@@ -200,6 +210,9 @@
         </thead>
         <tbody id="companies-body"></tbody>
       </table>
+      <div class="danger-zone">
+        <button id="clear-all" type="button" class="btn-link danger">Очистить весь список…</button>
+      </div>
     </section>
   </main>
 </body>

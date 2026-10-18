@@ -1,14 +1,23 @@
 {
   "name": "lead-finder",
-  "version": "0.1.0",
+  "productName": "Lead Finder",
+  "version": "0.5.0",
   "description": "Lead Finder — помощник для поиска клиентов на создание сайтов и лендингов",
   "private": true,
   "type": "module",
+  "main": "electron/main.js",
   "engines": {
     "node": ">=22.13"
   },
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning src/main.js",
-    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
+    "app": "electron .",
+    "build:icon": "node scripts/make-icon.js",
+    "build:app": "node scripts/build-app.js"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "44.9.0"
   }
 }

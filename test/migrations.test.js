@@ -63,6 +63,30 @@ test('следующее новое поле тоже добавится без 
   assert.equal(readdirSync(path.join(path.dirname(file), 'backups')).length, 1);
 });
 
+test('полная очистка через сервер сначала кладёт резервную копию рядом с базой', async (t) => {
+  const { startLeadFinder } = await import('../src/start.js');
+  const file = tempDbFile(t);
+  const app = await startLeadFinder({ dbFile: file, port: 0 });
+  let result;
+  try {
+    addCompany(app.db, { name: 'Кафе «Ромашка»', phone: '+7 843 200-00-00' });
+    const response = await fetch(`${app.url}api/companies/clear`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: 'all' }),
+    });
+    result = await response.json();
+  } finally {
+    // Закрываем сервер и базу сразу: Windows не даёт удалить временную папку с открытым файлом базы.
+    app.close();
+  }
+  assert.equal(result.deleted, 1);
+  assert.match(path.basename(result.backup), /^leads-before-clear-.*\.db$/);
+
+  // В копии компания на месте — очистку можно «откатить», подложив этот файл вместо leads.db.
+  const backup = openDatabase(result.backup);
+  assert.equal(listCompanies(backup)[0].name, 'Кафе «Ромашка»');
+  backup.close();
+});
+
 test('ошибочная миграция откатывается целиком, база остаётся рабочей', (t) => {
   const file = tempDbFile(t);
 

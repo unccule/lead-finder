@@ -2,6 +2,8 @@
 //
 //   GET  /api/companies     → { companies: [...] }                список, новые сверху
 //   POST /api/companies     → 201 { company } | 400 { error, fields } | 409 { error, existing }
+//   POST /api/companies/delete { ids }        → { deleted }        выборочно (запоминаются как «не предлагать»)
+//   POST /api/companies/clear  { confirm: 'all' } → { deleted, backup }  всё, с резервной копией базы
 //   GET  /api/osm/groups    → { groups: [...] }                   сферы для автопоиска
 //   POST /api/osm/search    → { search_id, city, total, counts, sample }   найти, но пока не сохранять
 //   POST /api/osm/import    → { added, duplicates, invalid }      добавить найденное в базу
@@ -12,7 +14,10 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { addCompanies, addCompany, companiesToCheck, findExisting, listCompanies } from './companies.js';
+import {
+  addCompanies, addCompany, clearCompanies, companiesToCheck, deleteCompanies, findExisting, isExcluded, listCompanies,
+} from './companies.js';
+import { backupDatabase } from './db.js';
 import { OSM_GROUPS, searchOsm } from './osm.js';
 import { checkSite, createSiteCheckJob } from './site-check.js';
 
@@ -42,11 +47,14 @@ class HttpError extends Error {
   }
 }
 
+const MAX_DELETE_IDS = 10_000;
+
 /**
- * Создаёт сервер. fetchImpl, lookup и sitePauseMs можно подменить в тестах,
+ * Создаёт сервер. dbFile — путь к файлу базы (для резервной копии перед очисткой).
+ * fetchImpl, lookup и sitePauseMs можно подменить в тестах,
  * чтобы проверять поиск и проверку сайтов без настоящего интернета.
  */
-export function createServer({ db, fetchImpl = fetch, lookup, sitePauseMs } = {}) {
+export function createServer({ db, dbFile, fetchImpl = fetch, lookup, sitePauseMs } = {}) {
   const siteJob = createSiteCheckJob({
     db,
     check: (url) => checkSite(url, { fetchImpl, ...(lookup && { lookup }) }),
@@ -63,6 +71,26 @@ export function createServer({ db, fetchImpl = fetch, lookup, sitePauseMs } = {}
         if (result.ok) return sendJson(res, 201, { company: result.company });
         if (result.reason === 'invalid') return sendJson(res, 400, { error: 'Проверь отмеченные поля', fields: result.errors });
         return sendJson(res, 409, { error: result.message, existing: result.existing });
+      },
+    },
+
+    '/api/companies/delete': {
+      POST: async (req, res) => {
+        const { ids } = await readJson(req);
+        const valid = Array.isArray(ids) && ids.length <= MAX_DELETE_IDS && ids.every((id) => Number.isInteger(id) && id > 0);
+        if (!valid || ids.length === 0) throw new HttpError(400, 'Не выбраны компании для удаления');
+        sendJson(res, 200, deleteCompanies(db, ids));
+      },
+    },
+
+    '/api/companies/clear': {
+      POST: async (req, res) => {
+        // Явное подтверждение в самом запросе: случайный запрос не сотрёт всю базу.
+        const { confirm } = await readJson(req);
+        if (confirm !== 'all') throw new HttpError(400, 'Нужно подтверждение полной очистки');
+        // Сначала копия базы — если очистка была ошибкой, всё можно вернуть.
+        const backup = dbFile && dbFile !== ':memory:' ? backupDatabase(db, dbFile, 'before-clear') : null;
+        sendJson(res, 200, { ...clearCompanies(db), backup });
       },
     },
 
@@ -84,7 +112,11 @@ export function createServer({ db, fetchImpl = fetch, lookup, sitePauseMs } = {}
             { city: city.trim(), groups: Array.isArray(groups) ? groups.filter((g) => typeof g === 'string') : [] },
             { fetchImpl },
           );
-          for (const item of found.items) item.in_base = findExisting(db, toCompanyInput(item)) !== null;
+          for (const item of found.items) {
+            item.in_base = findExisting(db, toCompanyInput(item)) !== null;
+            // Удалял её выборочно — значит, она тебе не нужна: не предлагаем снова.
+            item.excluded = !item.in_base && isExcluded(db, toCompanyInput(item));
+          }
           osm.last = { id: randomUUID(), city: found.city, items: found.items, skipped: found.skipped };
           sendJson(res, 200, searchSummary(osm.last));
         } finally {
@@ -101,7 +133,7 @@ export function createServer({ db, fetchImpl = fetch, lookup, sitePauseMs } = {}
         }
         const wanted = new Set(Array.isArray(include) ? include : []);
         const chosen = osm.last.items.filter((item) =>
-          !item.in_base && wanted.has(item.site_kind === 'site' ? 'with_site' : 'no_site'));
+          !item.in_base && !item.excluded && wanted.has(item.site_kind === 'site' ? 'with_site' : 'no_site'));
 
         const summary = addCompanies(db, chosen.map(toCompanyInput));
         for (const item of chosen) item.in_base = true; // повторное нажатие не добавит их снова
@@ -176,7 +208,7 @@ function toCompanyInput(item) {
 }
 
 function searchSummary({ id, city, items, skipped }) {
-  const fresh = items.filter((item) => !item.in_base);
+  const fresh = items.filter((item) => !item.in_base && !item.excluded);
   return {
     search_id: id,
     city: { name: city.name, display: city.display },
@@ -184,7 +216,8 @@ function searchSummary({ id, city, items, skipped }) {
     counts: {
       new_no_site: fresh.filter((item) => item.site_kind !== 'site').length,
       new_with_site: fresh.filter((item) => item.site_kind === 'site').length,
-      in_base: items.length - fresh.length,
+      in_base: items.filter((item) => item.in_base).length,
+      excluded: items.filter((item) => item.excluded).length,
       skipped_no_contacts: skipped,
     },
     // Несколько примеров «без сайта», чтобы глазами убедиться, что нашлось то, что нужно.

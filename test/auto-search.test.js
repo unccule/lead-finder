@@ -52,7 +52,7 @@ test('поиск → итоги → добавление в базу → про�
   const search = await response.json();
   assert.equal(search.city.name, 'Ставрополь');
   assert.equal(search.total, 5);
-  assert.deepEqual(search.counts, { new_no_site: 4, new_with_site: 1, in_base: 0, skipped_no_contacts: 1 });
+  assert.deepEqual(search.counts, { new_no_site: 4, new_with_site: 1, in_base: 0, excluded: 0, skipped_no_contacts: 1 });
   assert.ok(search.sample.some((item) => item.name === 'Синичка'));
 
   response = await post('/api/osm/import', { search_id: search.search_id, include: ['no_site', 'with_site'] });
@@ -78,10 +78,48 @@ test('поиск → итоги → добавление в базу → про�
 
 test('повторный поиск видит, что компании уже в базе; повторное добавление ничего не дублирует', async () => {
   const search = await (await post('/api/osm/search', { city: 'Ставрополь', groups: ['food'] })).json();
-  assert.deepEqual(search.counts, { new_no_site: 0, new_with_site: 0, in_base: 5, skipped_no_contacts: 1 });
+  assert.deepEqual(search.counts, { new_no_site: 0, new_with_site: 0, in_base: 5, excluded: 0, skipped_no_contacts: 1 });
   const imported = await (await post('/api/osm/import', { search_id: search.search_id, include: ['no_site', 'with_site'] })).json();
   assert.equal(imported.added, 0);
   assert.equal(listCompanies(db).length, 5);
+});
+
+test('выборочно удалённые компании автопоиск больше не предлагает; полная очистка — начинаем с нуля', async () => {
+  const sinichka = listCompanies(db).find((c) => c.name === 'Синичка');
+  let response = await post('/api/companies/delete', { ids: [sinichka.id] });
+  assert.deepEqual(await response.json(), { deleted: 1 });
+  assert.equal(listCompanies(db).length, 4);
+
+  let search = await (await post('/api/osm/search', { city: 'Ставрополь', groups: ['food'] })).json();
+  assert.deepEqual(search.counts, { new_no_site: 0, new_with_site: 0, in_base: 4, excluded: 1, skipped_no_contacts: 1 });
+  let imported = await (await post('/api/osm/import', { search_id: search.search_id, include: ['no_site', 'with_site'] })).json();
+  assert.equal(imported.added, 0, '«Синичка» не вернулась');
+
+  response = await post('/api/companies/clear', { confirm: 'all' });
+  const cleared = await response.json();
+  assert.equal(cleared.deleted, 4);
+  assert.equal(cleared.backup, null, 'база в памяти — копию не делаем');
+  assert.equal(listCompanies(db).length, 0);
+
+  search = await (await post('/api/osm/search', { city: 'Ставрополь', groups: ['food'] })).json();
+  assert.deepEqual(search.counts, { new_no_site: 4, new_with_site: 1, in_base: 0, excluded: 0, skipped_no_contacts: 1 },
+    'после полной очистки список «не предлагать» тоже пуст');
+  imported = await (await post('/api/osm/import', { search_id: search.search_id, include: ['no_site'] })).json();
+  assert.equal(imported.added, 4);
+});
+
+test('удаление: защита от ошибочных и случайных запросов', async () => {
+  for (const body of [{}, { ids: [] }, { ids: ['1'] }, { ids: [1.5] }, { ids: [-1] }, { ids: 'all' }]) {
+    const response = await post('/api/companies/delete', body);
+    assert.equal(response.status, 400, JSON.stringify(body));
+  }
+  for (const body of [{}, { confirm: true }, { confirm: 'yes' }]) {
+    const response = await post('/api/companies/clear', body);
+    assert.equal(response.status, 400, JSON.stringify(body));
+  }
+  const notJson = await fetch(`${baseUrl}/api/companies/clear`, { method: 'POST', body: 'confirm=all' });
+  assert.equal(notJson.status, 415, 'обычная HTML-форма с чужого сайта не сможет очистить базу');
+  assert.ok(listCompanies(db).length > 0, 'ничего не удалено');
 });
 
 test('устаревший поиск и неверные данные — понятные ошибки', async () => {

@@ -83,6 +83,56 @@ export function findExisting(db, input) {
   return findDuplicate(db, withKeys(check.data))?.company ?? null;
 }
 
+/** Удалял ли ты такую компанию выборочно (список «не предлагать снова»)? */
+export function isExcluded(db, input) {
+  const check = validateCompany(input);
+  if (!check.ok) return false;
+  return findDuplicate(db, withKeys(check.data), { table: 'excluded', columns: 'id, name' }) !== null;
+}
+
+/**
+ * Выборочное удаление. Удалённые запоминаются в списке «не предлагать снова»,
+ * чтобы автопоиск не добавил их обратно. Возвращает { deleted }.
+ */
+export function deleteCompanies(db, ids) {
+  const select = db.prepare('SELECT name, source, source_id, phone, name_key, address_key FROM companies WHERE id = ?');
+  const remember = db.prepare(`INSERT INTO excluded (name, source, source_id, phone, name_key, address_key, excluded_at)
+    VALUES ($name, $source, $source_id, $phone, $name_key, $address_key, $now)`);
+  const remove = db.prepare('DELETE FROM companies WHERE id = ?');
+  const now = new Date().toISOString();
+
+  let deleted = 0;
+  db.exec('BEGIN');
+  try {
+    for (const id of ids) {
+      const company = select.get(id);
+      if (!company) continue; // уже удалена (например, в другом окне)
+      remember.run({ ...company, now });
+      remove.run(id);
+      deleted += 1;
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+  return { deleted };
+}
+
+/** Полная очистка: все компании и список «не предлагать снова» — начинаешь с нуля. Возвращает { deleted }. */
+export function clearCompanies(db) {
+  db.exec('BEGIN');
+  try {
+    const { changes } = db.prepare('DELETE FROM companies').run();
+    db.prepare('DELETE FROM excluded').run();
+    db.exec('COMMIT');
+    return { deleted: Number(changes) };
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
 /** Компании, у которых есть собственный сайт для проверки. scope: 'new' — ещё не проверенные, 'all' — все. */
 export function companiesToCheck(db, scope = 'new') {
   const where = scope === 'all' ? "website != ''" : "website != '' AND site_checked_at IS NULL";
@@ -109,10 +159,11 @@ function withKeys(data) {
  *     (так ловится и та же компания, добавленная из другой карты);
  *  3. телефона нет → то же название + тот же адрес, а если нет и адреса — только название.
  * Название и адрес сравниваем по «ключу» (textKey): без регистра, кавычек и лишних пробелов.
+ * table/columns — где искать: в компаниях или в списке «не предлагать снова» (те же правила).
  */
-function findDuplicate(db, data) {
+function findDuplicate(db, data, { table = 'companies', columns = PUBLIC_COLUMNS } = {}) {
   const find = (where, ...params) => {
-    const row = db.prepare(`SELECT ${PUBLIC_COLUMNS} FROM companies WHERE ${where} ORDER BY id LIMIT 1`).get(...params);
+    const row = db.prepare(`SELECT ${columns} FROM ${table} WHERE ${where} ORDER BY id LIMIT 1`).get(...params);
     return row ? toPlain(row) : null;
   };
 

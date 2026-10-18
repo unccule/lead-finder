@@ -59,4 +59,23 @@ export const MIGRATIONS = [
       ALTER TABLE companies ADD COLUMN site_checked_at TEXT;
     `,
   },
+  {
+    version: 4,
+    name: 'Список «не предлагать снова»',
+    // Компании, которые ты удалил выборочно: автопоиск их больше не добавляет.
+    // Храним только то, по чему узнаём компанию (те же правила, что для дублей).
+    sql: `
+      CREATE TABLE excluded (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL,
+        source      TEXT NOT NULL DEFAULT 'other',
+        source_id   TEXT,
+        phone       TEXT NOT NULL DEFAULT '',
+        name_key    TEXT NOT NULL,
+        address_key TEXT NOT NULL DEFAULT '',
+        excluded_at TEXT NOT NULL
+      );
+      CREATE INDEX excluded_name_key ON excluded (name_key);
+    `,
+  },
 ];
