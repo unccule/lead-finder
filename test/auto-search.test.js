@@ -108,6 +108,48 @@ test('выборочно удалённые компании автопоиск 
   assert.equal(imported.added, 4);
 });
 
+test('удалённых раньше можно вернуть галочкой «добавить снова» или очистив список «не предлагать снова»', async () => {
+  const get = async (path) => (await fetch(baseUrl + path)).json();
+  // Сначала в базе должны быть все 5 найденных компаний (предыдущий тест добавил только «без сайта»).
+  const first = await (await post('/api/osm/search', { city: 'Ставрополь', groups: ['food'] })).json();
+  await post('/api/osm/import', { search_id: first.search_id, include: ['no_site', 'with_site'] });
+  const all = listCompanies(db);
+  assert.equal(all.length, 5);
+  // Как было у пользователя: «выбрать всех → удалить» — все попали в «не предлагать снова».
+  await post('/api/companies/delete', { ids: all.map((c) => c.id) });
+  assert.equal(listCompanies(db).length, 0);
+  assert.equal((await get('/api/excluded')).count, all.length);
+
+  let search = await (await post('/api/osm/search', { city: 'Ставрополь', groups: ['food'] })).json();
+  assert.equal(search.counts.new_no_site + search.counts.new_with_site, 0);
+  assert.equal(search.counts.excluded, all.length);
+
+  // Галочка «Удалённые раньше — добавить снова».
+  const imported = await (await post('/api/osm/import', { search_id: search.search_id, include: ['excluded'] })).json();
+  assert.equal(imported.added, all.length);
+  assert.equal((await get('/api/excluded')).count, 0, 'вернувшиеся убраны из «не предлагать снова»');
+
+  // Удалить без запоминания (галочка снята) — список «не предлагать» не растёт.
+  await post('/api/companies/delete', { ids: listCompanies(db).map((c) => c.id), remember: false });
+  assert.equal((await get('/api/excluded')).count, 0);
+  search = await (await post('/api/osm/search', { city: 'Ставрополь', groups: ['food'] })).json();
+  assert.equal(search.counts.excluded, 0);
+  assert.equal(search.counts.new_no_site + search.counts.new_with_site, all.length);
+
+  // Очистка самого списка «не предлагать снова».
+  const back = await (await post('/api/osm/import', { search_id: search.search_id, include: ['no_site', 'with_site'] })).json();
+  assert.equal(back.added, all.length);
+  await post('/api/companies/delete', { ids: listCompanies(db).map((c) => c.id) });
+  assert.equal((await get('/api/excluded')).count, all.length);
+  assert.equal((await post('/api/excluded/clear', {})).status, 400, 'без подтверждения не чистим');
+  assert.deepEqual(await (await post('/api/excluded/clear', { confirm: 'all' })).json(), { cleared: all.length });
+  assert.equal((await get('/api/excluded')).count, 0);
+
+  // Вернём компании для следующих тестов.
+  search = await (await post('/api/osm/search', { city: 'Ставрополь', groups: ['food'] })).json();
+  await post('/api/osm/import', { search_id: search.search_id, include: ['no_site', 'with_site'] });
+});
+
 test('удаление: защита от ошибочных и случайных запросов', async () => {
   for (const body of [{}, { ids: [] }, { ids: ['1'] }, { ids: [1.5] }, { ids: [-1] }, { ids: 'all' }]) {
     const response = await post('/api/companies/delete', body);

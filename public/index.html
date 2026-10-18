@@ -226,6 +226,8 @@
       <div id="selection-bar" class="selection-bar" hidden>
         <span id="selection-count"></span>
         <button id="delete-selected" type="button" class="btn-danger">Удалить выбранные</button>
+        <label class="remember-choice"><input type="checkbox" id="delete-remember" checked>
+          не предлагать их снова в автопоиске</label>
         <button id="clear-selection" type="button" class="btn-link">снять выбор</button>
       </div>
       <p id="list-status" class="list-status">Загружаю список…</p>
@@ -248,6 +250,10 @@
         <tbody id="companies-body"></tbody>
       </table>
       <div class="danger-zone">
+        <span id="excluded-info" class="hint" hidden>
+          Список «не предлагать снова»: <span id="excluded-count">0</span>
+          <button id="clear-excluded" type="button" class="btn-link">очистить</button>
+        </span>
         <button id="clear-all" type="button" class="btn-link danger">Очистить весь список…</button>
       </div>
     </section>

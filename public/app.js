@@ -93,6 +93,7 @@ initAutoSearch({
   onImported: async (summary) => {
     filter = 'all';
     await loadCompanies();
+    await selection.refreshExcluded(); // «удалённые раньше» могли вернуться в таблицу
     if (summary.site_check_started) watchSiteChecks();
   },
 });

@@ -6,7 +6,8 @@
 //   PATCH /api/companies/:id → 200 { company } | 400 | 404 | 409  изменить (можно прислать одно поле)
 //   GET/PUT /api/settings   → { settings }                        подпись для предложений
 //   POST /api/companies/import { companies } → { added, duplicates, invalid, problems }  загрузка из файла
-//   POST /api/companies/delete { ids }        → { deleted }        выборочно (запоминаются как «не предлагать»)
+//   POST /api/companies/delete { ids, remember } → { deleted }     выборочно (remember: запомнить «не предлагать»)
+//   GET  /api/excluded → { count };  POST /api/excluded/clear { confirm: 'all' } → { cleared }
 //   POST /api/companies/clear  { confirm: 'all' } → { deleted, backup }  всё, с резервной копией базы
 //   GET  /api/osm/groups    → { groups: [...] }                   сферы для автопоиска
 //   POST /api/osm/search    → { search_id, city, total, counts, sample }   найти, но пока не сохранять
@@ -19,8 +20,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  addCompanies, addCompany, clearCompanies, companiesToCheck, deleteCompanies, findExisting, getCompany,
-  getStatusHistory, importCompanies, isExcluded, listCompanies, updateCompany,
+  addCompanies, addCompany, clearCompanies, clearExcluded, companiesToCheck, countExcluded, deleteCompanies,
+  findExisting, getCompany, getStatusHistory, importCompanies, isExcluded, listCompanies, unexclude, updateCompany,
 } from './companies.js';
 import { MAX_IMPORT_ROWS } from '../shared/import-csv.js';
 import { backupDatabase } from './db.js';
@@ -109,10 +110,23 @@ export function createServer({ db, dbFile, fetchImpl = fetch, lookup, sitePauseM
 
     '/api/companies/delete': {
       POST: async (req, res) => {
-        const { ids } = await readJson(req);
+        const { ids, remember } = await readJson(req);
         const valid = Array.isArray(ids) && ids.length <= MAX_DELETE_IDS && ids.every((id) => Number.isInteger(id) && id > 0);
         if (!valid || ids.length === 0) throw new HttpError(400, 'Не выбраны компании для удаления');
-        sendJson(res, 200, deleteCompanies(db, ids));
+        // remember: false — просто удалить, не запоминая в «не предлагать снова».
+        sendJson(res, 200, deleteCompanies(db, ids, { remember: remember !== false }));
+      },
+    },
+
+    '/api/excluded': {
+      GET: (req, res) => sendJson(res, 200, { count: countExcluded(db) }),
+    },
+
+    '/api/excluded/clear': {
+      POST: async (req, res) => {
+        const { confirm } = await readJson(req);
+        if (confirm !== 'all') throw new HttpError(400, 'Нужно подтверждение');
+        sendJson(res, 200, clearExcluded(db));
       },
     },
 
@@ -174,14 +188,18 @@ export function createServer({ db, dbFile, fetchImpl = fetch, lookup, sitePauseM
           throw new HttpError(410, 'Результаты поиска устарели (например, программу перезапускали). Запусти поиск ещё раз.');
         }
         const wanted = new Set(Array.isArray(include) ? include : []);
-        const chosen = osm.last.items.filter((item) =>
-          !item.in_base && !item.excluded && wanted.has(item.site_kind === 'site' ? 'with_site' : 'no_site'));
+        // 'excluded' — «удалённые тобой раньше»: добавить их снова и убрать из «не предлагать снова».
+        const chosen = osm.last.items.filter((item) => !item.in_base && (item.excluded
+          ? wanted.has('excluded')
+          : wanted.has(item.site_kind === 'site' ? 'with_site' : 'no_site')));
 
+        for (const item of chosen) if (item.excluded) unexclude(db, toCompanyInput(item));
         const summary = addCompanies(db, chosen.map(toCompanyInput));
         for (const item of chosen) item.in_base = true; // повторное нажатие не добавит их снова
 
         // Добавили компании с сайтами — сразу запускаем их проверку в фоне.
-        const check = summary.added > 0 && wanted.has('with_site') ? siteJob.start('new') : null;
+        const withSites = chosen.some((item) => item.site_kind === 'site');
+        const check = summary.added > 0 && withSites ? siteJob.start('new') : null;
         sendJson(res, 200, { ...summary, site_check_started: Boolean(check?.started) });
       },
     },

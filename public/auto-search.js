@@ -69,8 +69,11 @@ export function initAutoSearch({ onImported }) {
       textElement('p', `Найдено компаний: ${total}. Новых без своего сайта: ${counts.new_no_site}, ` +
         `новых со своим сайтом: ${counts.new_with_site}, уже в базе: ${counts.in_base}.`),
     ];
-    if (counts.excluded > 0) {
-      blocks.push(textElement('p', `Не предлагаю снова ${counts.excluded}: ты удалял их из списка раньше.`, 'hint'));
+    const onlyExcluded = counts.new_no_site + counts.new_with_site === 0 && counts.excluded > 0;
+    if (onlyExcluded) {
+      blocks.push(textElement('p', `Все найденные компании (${counts.excluded}) ты раньше удалял из списка, ` +
+        'поэтому программа не предлагает их снова. Чтобы всё-таки добавить их — отметь «Удалённые раньше» ниже.',
+      'paste-warning'));
     }
     if (counts.skipped_no_contacts > 0) {
       blocks.push(textElement('p', `Пропущено ${counts.skipped_no_contacts}: в OpenStreetMap у них нет ни телефона, ` +
@@ -80,9 +83,12 @@ export function initAutoSearch({ onImported }) {
     const noSite = checkbox(`Без своего сайта (${counts.new_no_site})`, counts.new_no_site > 0);
     const withSite = checkbox(`Со своим сайтом (${counts.new_with_site}) — программа проверит, хорош ли сайт`,
       counts.new_with_site > 0);
+    // Удалённых раньше по умолчанию не добавляем — ты сам их убрал. Но вернуть можно одной галочкой.
+    const excluded = checkbox(`Удалённые тобой раньше (${counts.excluded}) — добавить снова`, false);
     const choice = document.createElement('div');
     choice.className = 'checks';
     choice.append(noSite.label, withSite.label);
+    if (counts.excluded > 0) choice.append(excluded.label);
     blocks.push(choice);
 
     if (sample.length > 0) {
@@ -96,10 +102,14 @@ export function initAutoSearch({ onImported }) {
 
     const importButton = textElement('button', 'Добавить в базу', 'btn-primary');
     importButton.type = 'button';
-    importButton.disabled = counts.new_no_site + counts.new_with_site === 0;
+    importButton.disabled = counts.new_no_site + counts.new_with_site + counts.excluded === 0;
     importButton.addEventListener('click', async () => {
-      const include = [noSite.input.checked && 'no_site', withSite.input.checked && 'with_site'].filter(Boolean);
-      if (include.length === 0) return showStatus('Отметь, кого добавить', 'error');
+      const include = [
+        noSite.input.checked && 'no_site',
+        withSite.input.checked && 'with_site',
+        excluded.input.checked && 'excluded',
+      ].filter(Boolean);
+      if (include.length === 0) return showStatus('Отметь галочкой, кого добавить', 'error');
       importButton.disabled = true;
       const { ok, data } = await request('POST', '/api/osm/import', { search_id: search.search_id, include });
       if (!ok) {

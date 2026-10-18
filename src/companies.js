@@ -223,11 +223,33 @@ export function isExcluded(db, input) {
   return findDuplicate(db, withKeys(check.data), { table: 'excluded', columns: 'id, name' }) !== null;
 }
 
+/** Сколько компаний в списке «не предлагать снова». */
+export function countExcluded(db) {
+  return Number(db.prepare('SELECT COUNT(*) AS n FROM excluded').get().n);
+}
+
+/** Очистить только список «не предлагать снова» (сами компании не трогаем). Возвращает { cleared }. */
+export function clearExcluded(db) {
+  return { cleared: Number(db.prepare('DELETE FROM excluded').run().changes) };
+}
+
+/** Убрать компанию из списка «не предлагать снова» (например, ты решил всё-таки её добавить). */
+export function unexclude(db, input) {
+  const check = validateCompany(input);
+  if (!check.ok) return;
+  const data = withKeys(check.data);
+  for (let i = 0; i < 20; i++) { // одна компания могла попасть в список несколько раз
+    const match = findDuplicate(db, data, { table: 'excluded', columns: 'id, name' });
+    if (!match) return;
+    db.prepare('DELETE FROM excluded WHERE id = ?').run(match.company.id);
+  }
+}
+
 /**
- * Выборочное удаление. Удалённые запоминаются в списке «не предлагать снова»,
- * чтобы автопоиск не добавил их обратно. Возвращает { deleted }.
+ * Выборочное удаление. Если remember = true (по умолчанию), удалённые запоминаются
+ * в списке «не предлагать снова», чтобы автопоиск не добавил их обратно. Возвращает { deleted }.
  */
-export function deleteCompanies(db, ids) {
+export function deleteCompanies(db, ids, { remember: rememberDeleted = true } = {}) {
   const select = db.prepare('SELECT name, source, source_id, phone, name_key, address_key FROM companies WHERE id = ?');
   const remember = db.prepare(`INSERT INTO excluded (name, source, source_id, phone, name_key, address_key, excluded_at)
     VALUES ($name, $source, $source_id, $phone, $name_key, $address_key, $now)`);
@@ -240,7 +262,7 @@ export function deleteCompanies(db, ids) {
     for (const id of ids) {
       const company = select.get(id);
       if (!company) continue; // уже удалена (например, в другом окне)
-      remember.run({ ...company, now });
+      if (rememberDeleted) remember.run({ ...company, now });
       remove.run(id);
       deleted += 1;
     }

@@ -273,7 +273,10 @@ select { font: inherit; font-size: .9rem; padding: 7px 8px; border: 1px solid va
 }
 .btn-danger { background: var(--danger); color: #fff; font-weight: 600; padding: 7px 14px; }
 .btn-danger:hover { filter: brightness(.92); }
-.danger-zone { margin-top: 16px; padding-top: 10px; border-top: 1px dashed var(--line); text-align: right; }
+.danger-zone { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; margin-top: 16px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.danger-zone #clear-all { margin-left: auto; }
+.remember-choice { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--muted); }
+.remember-choice input { width: auto; margin: 0; }
 .btn-link.danger { color: var(--danger); }
 
 .site-line { display: block; margin-top: 4px; font-size: .85rem; }
