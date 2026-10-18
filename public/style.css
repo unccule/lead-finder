@@ -38,6 +38,10 @@ body {
 .top .wrap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; padding-top: 14px; padding-bottom: 14px; }
 .top h1 { margin: 0; font-size: 1.35rem; }
 .top p { margin: 0; color: var(--muted); }
+.top-nav { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-left: auto; font-size: .95rem; }
+.top-nav a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+.top-nav a:hover { text-decoration: underline; }
+.nav-due { margin-left: 4px; padding: 0 7px; border-radius: 999px; background: var(--danger-bg); color: var(--danger); font-size: .8rem; font-weight: 600; }
 
 /* Карточки-разделы */
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 20px; }

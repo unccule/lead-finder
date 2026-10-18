@@ -61,6 +61,12 @@ export function initFilters({ onChange }) {
         if (reminder?.state === 'today') dueToday += 1;
       }
       reminders.hidden = overdue + dueToday === 0;
+      // Тот же счётчик — в шапке рядом со ссылкой «Компании», чтобы его было видно сразу при запуске.
+      const navDue = document.getElementById('nav-due');
+      navDue.hidden = reminders.hidden;
+      navDue.textContent = `🔔 ${overdue + dueToday}`;
+      navDue.title = 'Пора связаться (сегодня и просроченные)';
+      document.getElementById('nav-count').textContent = String(companies.length);
       reminders.textContent = `🔔 Связаться сегодня: ${dueToday}` + (overdue > 0 ? ` · просрочено: ${overdue}` : '') + ' — показать';
       reminders.classList.toggle('has-overdue', overdue > 0);
 

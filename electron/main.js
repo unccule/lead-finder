@@ -68,6 +68,20 @@ async function start() {
   });
   mainWindow.webContents.on('context-menu', (event, params) => showContextMenu(params));
 
+  // Скачивание файлов (экспорт в CSV): окно «Сохранить как» с папкой «Загрузки» по умолчанию.
+  mainWindow.webContents.session.on('will-download', (event, item) => {
+    const testFolder = process.env.LEAD_FINDER_SELFTEST_DOWNLOADS; // только для самопроверки сборки
+    if (testFolder) {
+      item.setSavePath(path.join(testFolder, item.getFilename()));
+      return;
+    }
+    item.setSaveDialogOptions({
+      title: 'Сохранить список компаний',
+      defaultPath: path.join(app.getPath('downloads'), item.getFilename()),
+      filters: [{ name: 'CSV для Excel', extensions: ['csv'] }],
+    });
+  });
+
   await mainWindow.loadURL(leadFinder.url);
   if (process.env.LEAD_FINDER_SELFTEST) await selfTest(process.env.LEAD_FINDER_SELFTEST);
 }
@@ -205,6 +219,23 @@ async function selfTest(screenshotFile) {
     tabs: [...document.querySelectorAll('#filter-tabs .tab')].map((b) => b.textContent),
     groups: document.querySelectorAll('#osm-groups input').length,
   })`);
+
+  // Если указана папка для скачиваний — проверяем экспорт: нажимаем кнопку и ждём файл.
+  if (process.env.LEAD_FINDER_SELFTEST_DOWNLOADS) {
+    const done = new Promise((resolve) => {
+      mainWindow.webContents.session.once('will-download', (event, item) => {
+        item.once('done', (e, state) => resolve({ state, file: item.getSavePath(), bytes: item.getReceivedBytes() }));
+      });
+      setTimeout(() => resolve({ state: 'не дождались скачивания' }), 5000);
+    });
+    await mainWindow.webContents.executeJavaScript("document.getElementById('export-csv').click()");
+    summary.download = await done;
+    // Буфер обмена: кнопке «Скопировать» нужен «защищённый контекст» и navigator.clipboard.
+    // Сам буфер не трогаем, чтобы не затереть то, что в нём лежит.
+    summary.clipboard = await mainWindow.webContents.executeJavaScript(
+      "({ secureContext: window.isSecureContext, writeText: typeof navigator.clipboard?.writeText })");
+  }
+
   const image = await mainWindow.webContents.capturePage();
   writeFileSync(screenshotFile, image.toPNG());
   console.log(JSON.stringify({ ...summary, dbFile: leadFinder.dbFile, packaged: app.isPackaged, node: process.versions.node }));

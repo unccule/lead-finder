@@ -78,6 +78,13 @@ field('card_url').addEventListener('input', updateCardHint);
 field('phone').addEventListener('blur', onPhoneBlur);
 sortSelect.addEventListener('change', renderTable);
 exportButton.addEventListener('click', exportCsv);
+// Ссылки в шапке плавно прокручивают к разделу (без перехода по адресу — так надёжнее и в программе).
+for (const link of document.querySelectorAll('[data-scroll]')) {
+  link.addEventListener('click', (event) => {
+    event.preventDefault();
+    document.getElementById(link.dataset.scroll).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
 checkButton.addEventListener('click', () => startSiteChecks('new'));
 recheckButton.addEventListener('click', () => startSiteChecks('all'));
 
