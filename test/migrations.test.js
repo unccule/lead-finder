@@ -46,18 +46,18 @@ test('следующее новое поле тоже добавится без 
   db.close();
 
   // «Новая версия программы»: появилась ещё одна миграция с новым полем.
-  const withStatus = [
+  const withPriority = [
     ...MIGRATIONS,
-    { version: LATEST + 1, name: 'Статус', sql: "ALTER TABLE companies ADD COLUMN status TEXT NOT NULL DEFAULT 'new'" },
+    { version: LATEST + 1, name: 'Приоритет', sql: "ALTER TABLE companies ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'" },
   ];
-  db = openDatabase(file, { migrations: withStatus });
-  const row = db.prepare('SELECT name, phone, status FROM companies').get();
-  assert.deepEqual({ ...row }, { name: 'Кафе «Ромашка»', phone: '+78432000000', status: 'new' });
+  db = openDatabase(file, { migrations: withPriority });
+  const row = db.prepare('SELECT name, phone, priority FROM companies').get();
+  assert.deepEqual({ ...row }, { name: 'Кафе «Ромашка»', phone: '+78432000000', priority: 'normal' });
   assert.equal(db.prepare('PRAGMA user_version').get().user_version, LATEST + 1);
   db.close();
 
   // Повторный запуск: миграции уже выполнены, новых копий не появляется, данные на месте.
-  db = openDatabase(file, { migrations: withStatus });
+  db = openDatabase(file, { migrations: withPriority });
   assert.equal(listCompanies(db).length, 1);
   db.close();
   assert.equal(readdirSync(path.join(path.dirname(file), 'backups')).length, 1);

@@ -166,6 +166,67 @@ select { font: inherit; font-size: .9rem; padding: 7px 8px; border: 1px solid va
 .reasons { display: grid; gap: 2px; margin: 4px 0 0; padding: 0; list-style: none; font-size: .8rem; color: var(--muted); }
 @media (min-width: 900px) { .companies td:nth-child(2) { min-width: 10.5rem; } } /* столбец «Горячесть» */
 
+/* Фильтры и напоминания */
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.filters input[type="search"] { flex: 1 1 16rem; width: auto; padding: 7px 10px; font-size: .9rem; }
+.filters select { flex: 0 1 auto; max-width: 100%; }
+.filters .btn-secondary { padding: 7px 14px; font-size: .9rem; }
+.reminders {
+  display: inline-block;
+  margin: 0 0 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #f0c36d;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: .9rem;
+}
+.reminders.has-overdue { border-color: #f0a3a3; background: var(--danger-bg); color: var(--danger); }
+
+/* Статус в строке таблицы */
+.status-select { padding: 4px 6px; font-size: .85rem; font-weight: 600; border-radius: 999px; max-width: 100%; }
+.status-new { background: var(--bg); }
+.status-contacted { background: #eef1ff; color: #3a4db5; border-color: #c9d1f5; }
+.status-replied { background: #e6f2fb; color: #1b649c; border-color: #bcd8ee; }
+.status-meeting { background: var(--warn-bg); color: var(--warn); border-color: #f0d9a6; }
+.status-client { background: var(--ok-bg); color: var(--ok); border-color: #b9e0c2; }
+.status-refused { background: #f1f1f1; color: #777; border-color: #ddd; }
+.reminder { display: block; margin-top: 4px; font-size: .8rem; color: var(--muted); }
+.reminder.today { color: var(--warn); font-weight: 600; }
+.reminder.overdue { color: var(--danger); font-weight: 600; }
+.name-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline dotted var(--muted);
+  text-underline-offset: 3px;
+  overflow-wrap: break-word;
+}
+@media (min-width: 900px) { .companies td:nth-child(3) { min-width: 8.5rem; } } /* столбец «Компания» */
+.name-button:hover { color: var(--accent); }
+
+/* Окно «Карточка компании» */
+.dialog { width: min(760px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--line); border-radius: 12px; color: var(--text); }
+.dialog::backdrop { background: rgba(20, 28, 45, .45); }
+.dialog form { display: flex; flex-direction: column; max-height: calc(100dvh - 26px); }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.dialog-head h2 { margin: 0; font-size: 1.1rem; overflow-wrap: anywhere; }
+.dialog-close { padding: 2px 10px; background: transparent; font-size: 1.5rem; line-height: 1; color: var(--muted); }
+.dialog-body { padding: 16px; overflow-y: auto; }
+.dialog .form-grid { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 560px) {
+  .dialog .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dialog .full { grid-column: 1 / -1; }
+}
+.dialog select { width: 100%; padding: 9px 11px; font-size: 1rem; }
+.dialog-message { margin: 0 16px 8px; }
+.dialog-actions { display: flex; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.history { margin-top: 14px; font-size: .85rem; color: var(--muted); }
+.history ul { margin: 0; padding-left: 1.2em; }
+
 /* Выбор и удаление */
 @media (min-width: 900px) { .select-col { width: 2.2rem; } }
 .companies input[type="checkbox"] { width: 18px; height: 18px; margin: 2px 0 0; cursor: pointer; }

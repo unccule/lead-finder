@@ -78,4 +78,23 @@ export const MIGRATIONS = [
       CREATE INDEX excluded_name_key ON excluded (name_key);
     `,
   },
+  {
+    version: 5,
+    name: 'Работа с клиентами: статус, дата следующего контакта, история',
+    sql: `
+      ALTER TABLE companies ADD COLUMN status TEXT NOT NULL DEFAULT 'new'; -- см. shared/statuses.js
+      ALTER TABLE companies ADD COLUMN next_contact_at TEXT;              -- дата 'ГГГГ-ММ-ДД' или NULL
+      ALTER TABLE companies ADD COLUMN status_changed_at TEXT;
+
+      -- Каждая смена статуса — отдельная строка: видно, когда написал, когда ответили.
+      -- ON DELETE CASCADE: удалили компанию — её история удалится сама.
+      CREATE TABLE status_history (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id  INTEGER NOT NULL REFERENCES companies (id) ON DELETE CASCADE,
+        status      TEXT    NOT NULL,
+        changed_at  TEXT    NOT NULL
+      );
+      CREATE INDEX status_history_company ON status_history (company_id);
+    `,
+  },
 ];

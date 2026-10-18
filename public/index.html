@@ -176,6 +176,7 @@
           <label class="sort" for="sort-order">Порядок:</label>
           <select id="sort-order">
             <option value="hot" selected>сначала горячие</option>
+            <option value="contact">по дате контакта</option>
             <option value="new">сначала новые</option>
           </select>
           <button id="check-sites" type="button" class="btn-secondary">Проверить сайты</button>
@@ -183,6 +184,26 @@
         </div>
       </div>
       <p id="check-status" class="hint check-status" aria-live="polite"></p>
+      <button id="reminders" type="button" class="reminders" hidden></button>
+      <div class="filters" role="search">
+        <input id="filter-text" type="search" placeholder="Поиск: название, телефон, адрес, заметка" aria-label="Поиск по компаниям">
+        <select id="filter-status" aria-label="Статус">
+          <option value="">Все статусы</option>
+          <option value="active">В работе (без клиентов и отказов)</option>
+          <option value="due">Связаться сегодня и просроченные</option>
+        </select>
+        <select id="filter-level" aria-label="Горячесть">
+          <option value="">Любая горячесть</option>
+          <option value="hot">Горячие</option>
+          <option value="warm">Тёплые</option>
+          <option value="cold">Холодные</option>
+        </select>
+        <select id="filter-category" aria-label="Сфера">
+          <option value="">Все сферы</option>
+        </select>
+        <button id="filter-reset" type="button" class="btn-link" hidden>сбросить фильтры</button>
+        <button id="export-csv" type="button" class="btn-secondary">Экспорт в Excel (CSV)</button>
+      </div>
       <div id="filter-tabs" class="tabs" role="group" aria-label="Показать компании"></div>
       <p id="list-message" class="message" role="status" aria-live="polite" hidden></p>
       <!-- Появляется, когда отмечена хотя бы одна компания; при прокрутке остаётся сверху -->
@@ -200,11 +221,11 @@
             </th>
             <th scope="col">Горячесть</th>
             <th scope="col">Компания</th>
+            <th scope="col">Статус</th>
             <th scope="col">Адрес</th>
             <th scope="col">Телефон</th>
             <th scope="col">Сайт / соцсети</th>
             <th scope="col">Карточка</th>
-            <th scope="col">Рейтинг</th>
             <th scope="col">Заметка</th>
           </tr>
         </thead>
@@ -215,5 +236,91 @@
       </div>
     </section>
   </main>
+
+  <!-- Карточка компании: правка всех полей, статус, дата контакта, заметка, история -->
+  <dialog id="company-dialog" class="dialog" aria-labelledby="dlg-title">
+    <form id="dlg-form" novalidate autocomplete="off">
+      <div class="dialog-head">
+        <h2 id="dlg-title">Компания</h2>
+        <button type="button" class="dialog-close" data-close aria-label="Закрыть">×</button>
+      </div>
+      <div class="dialog-body">
+        <div class="form-grid">
+          <div class="field">
+            <label for="dlg-status">Статус</label>
+            <select id="dlg-status" name="status"></select>
+            <p class="error" id="dlg-err-status" hidden></p>
+          </div>
+          <div class="field">
+            <label for="dlg-next">Следующий контакт</label>
+            <input id="dlg-next" name="next_contact_at" type="date">
+            <p class="error" id="dlg-err-next_contact_at" hidden></p>
+          </div>
+          <div class="field full">
+            <label for="dlg-note">Заметка</label>
+            <textarea id="dlg-note" name="note" rows="4" maxlength="2000"
+                      placeholder="Что обсудили, что предложить, когда перезвонить"></textarea>
+            <p class="error" id="dlg-err-note" hidden></p>
+          </div>
+          <div class="field full">
+            <label for="dlg-name">Название <span class="req" aria-hidden="true">*</span></label>
+            <input id="dlg-name" name="name" required maxlength="200">
+            <p class="error" id="dlg-err-name" hidden></p>
+          </div>
+          <div class="field">
+            <label for="dlg-category">Сфера</label>
+            <input id="dlg-category" name="category" list="categories" maxlength="100">
+            <p class="error" id="dlg-err-category" hidden></p>
+          </div>
+          <div class="field">
+            <label for="dlg-city">Город</label>
+            <input id="dlg-city" name="city" maxlength="100">
+            <p class="error" id="dlg-err-city" hidden></p>
+          </div>
+          <div class="field full">
+            <label for="dlg-address">Адрес</label>
+            <input id="dlg-address" name="address" maxlength="300">
+            <p class="error" id="dlg-err-address" hidden></p>
+          </div>
+          <div class="field">
+            <label for="dlg-phone">Рабочий телефон</label>
+            <input id="dlg-phone" name="phone" type="tel" maxlength="60">
+            <p class="error" id="dlg-err-phone" hidden></p>
+          </div>
+          <div class="field">
+            <label for="dlg-website">Сайт или соцсеть</label>
+            <input id="dlg-website" name="website" inputmode="url" maxlength="2000">
+            <p class="error" id="dlg-err-website" hidden></p>
+          </div>
+          <div class="field full">
+            <label for="dlg-other-links">Соцсети и другие ссылки</label>
+            <textarea id="dlg-other-links" name="other_links" rows="2" maxlength="4000" spellcheck="false"></textarea>
+            <p class="error" id="dlg-err-other_links" hidden></p>
+          </div>
+          <div class="field full">
+            <label for="dlg-card-url">Ссылка на карточку 2ГИС / Яндекс Карт / OpenStreetMap</label>
+            <input id="dlg-card-url" name="card_url" inputmode="url" maxlength="2000">
+            <p class="error" id="dlg-err-card_url" hidden></p>
+          </div>
+          <div class="field">
+            <label for="dlg-rating">Рейтинг</label>
+            <input id="dlg-rating" name="rating" inputmode="decimal" maxlength="10">
+            <p class="error" id="dlg-err-rating" hidden></p>
+          </div>
+          <div class="field">
+            <label for="dlg-reviews">Число отзывов</label>
+            <input id="dlg-reviews" name="reviews_count" inputmode="numeric" maxlength="15">
+            <p class="error" id="dlg-err-reviews_count" hidden></p>
+          </div>
+        </div>
+        <div id="dlg-history" class="history"></div>
+      </div>
+      <p id="dlg-message" class="message dialog-message" role="status" aria-live="polite" hidden></p>
+      <div class="dialog-actions">
+        <button type="submit" class="btn-primary">Сохранить</button>
+        <button type="button" class="btn-secondary" data-close>Отмена</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

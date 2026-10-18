@@ -9,8 +9,12 @@ import { classifyLink, linkKey } from '/shared/link-kinds.js';
 import { parseCardText } from '/shared/parse-card.js';
 import { SITE_GROUPS } from '/shared/site-status.js';
 import { assessCompany, byHotness } from '/shared/hotness.js';
+import { FINAL_STATUSES, STATUSES, STATUS_LABELS, contactReminder, formatDateRu, todayISO } from '/shared/statuses.js';
+import { companiesToCsv, csvFileName } from '/shared/export-csv.js';
 import { initAutoSearch } from '/auto-search.js';
 import { initSelection } from '/selection.js';
+import { initCompanyDialog } from '/company-dialog.js';
+import { initFilters } from '/filters.js';
 import { request } from '/api.js';
 
 const form = document.getElementById('company-form');
@@ -32,6 +36,11 @@ const sortSelect = document.getElementById('sort-order');
 let companies = [];
 let filter = 'all'; // какая вкладка над таблицей выбрана: 'all' или ключ из SITE_GROUPS
 const selection = initSelection({ reload: loadCompanies }); // галочки и удаление
+const filters = initFilters({ onChange: () => renderTable() }); // поиск, статус, горячесть, сфера
+const companyDialog = initCompanyDialog({ onSaved: (company) => replaceCompany(company, `Сохранено: ${company.name}`) });
+const listMessage = document.getElementById('list-message');
+const exportButton = document.getElementById('export-csv');
+let shown = { companies: [], assessments: new Map() }; // что сейчас видно в таблице — для экспорта
 
 // Быстрая вставка: HTML из буфера обмена, результат разбора и короткий итог «что заполнил».
 const paste = { html: '', result: null, summary: '' };
@@ -66,6 +75,7 @@ cardText.addEventListener('input', (event) => {
 field('card_url').addEventListener('input', updateCardHint);
 field('phone').addEventListener('blur', onPhoneBlur);
 sortSelect.addEventListener('change', renderTable);
+exportButton.addEventListener('click', exportCsv);
 checkButton.addEventListener('click', () => startSiteChecks('new'));
 recheckButton.addEventListener('click', () => startSiteChecks('all'));
 
@@ -464,30 +474,98 @@ async function refreshSiteChecks() {
 // ---------- Таблица ----------
 
 function renderTable() {
+  const today = todayISO();
   // Горячесть считаем один раз на компанию и дальше берём из этой «таблички».
   const assessments = new Map(companies.map((company) => [company.id, assessCompany(company)]));
-  renderTabs(assessments);
 
+  // Сначала фильтры (поиск, статус, горячесть, сфера), потом вкладка по состоянию сайта.
+  filters.update(companies, today);
+  const filtered = filters.apply(companies, assessments, today);
+  renderTabs(filtered, assessments);
   const visible = filter === 'all'
-    ? [...companies]
-    : companies.filter((company) => assessments.get(company.id).site.group === filter);
+    ? [...filtered]
+    : filtered.filter((company) => assessments.get(company.id).site.group === filter);
+
   // Список с сервера уже идёт «новые сверху», поэтому для этого порядка ничего делать не нужно.
-  if (sortSelect.value === 'hot') visible.sort(byHotness(assessments));
+  // В «сначала горячие» клиенты и отказы уходят вниз: работа с ними закончена.
+  if (sortSelect.value === 'hot') {
+    const hot = byHotness(assessments);
+    visible.sort((a, b) => Number(FINAL_STATUSES.has(a.status)) - Number(FINAL_STATUSES.has(b.status)) || hot(a, b));
+  }
+  if (sortSelect.value === 'contact') visible.sort(byNextContact(assessments));
 
   countLabel.textContent = String(companies.length);
   table.hidden = visible.length === 0;
   listStatus.hidden = visible.length > 0;
   listStatus.textContent = companies.length === 0
     ? 'Пока пусто. Найди компании автопоиском или добавь вручную через форму выше.'
-    : 'В этой вкладке пока никого нет.';
-  tbody.replaceChildren(...visible.map((company) => companyRow(company, assessments.get(company.id))));
+    : 'Под выбранные фильтры никто не подходит.';
+  tbody.replaceChildren(...visible.map((company) => companyRow(company, assessments.get(company.id), today)));
   selection.afterRender(visible, companies);
+
+  shown = { companies: visible, assessments };
+  exportButton.textContent = `Экспорт в Excel (CSV): ${visible.length}`;
+  exportButton.disabled = visible.length === 0;
 }
 
-/** Вкладки «Все · Без сайта · Сайт с проблемами · …» с количеством в каждой. */
-function renderTabs(assessments) {
-  const counts = { all: companies.length };
-  for (const { site } of assessments.values()) counts[site.group] = (counts[site.group] ?? 0) + 1;
+/** «По дате контакта»: сначала у кого дата раньше (просроченные — вверху), без даты — в конце. */
+function byNextContact(assessments) {
+  const hot = byHotness(assessments);
+  return (a, b) => {
+    if (a.next_contact_at && b.next_contact_at) return a.next_contact_at.localeCompare(b.next_contact_at) || hot(a, b);
+    if (a.next_contact_at || b.next_contact_at) return a.next_contact_at ? -1 : 1;
+    return hot(a, b);
+  };
+}
+
+/** Скачать то, что сейчас видно в таблице (с учётом фильтров, вкладки и порядка), файлом для Excel. */
+function exportCsv() {
+  if (shown.companies.length === 0) return;
+  const csv = companiesToCsv(shown.companies, shown.assessments);
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = csvFileName();
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  showListMessage(`Файл ${link.download} сохранён: ${shown.companies.length} компаний. Открывается в Excel двойным кликом.`, 'success');
+}
+
+/** Быстрая смена статуса прямо в таблице. */
+async function changeStatus(company, status) {
+  const { ok, data } = await request('PATCH', `/api/companies/${company.id}`, { status });
+  if (!ok) {
+    showListMessage(data.error || 'Не получилось сменить статус', 'error');
+    renderTable(); // вернуть в списке прежнее значение
+    return;
+  }
+  const next = data.company.next_contact_at ? ` Связаться: ${formatDateRu(data.company.next_contact_at)}.` : '';
+  replaceCompany(data.company, `${data.company.name}: статус «${STATUS_LABELS[data.company.status]}».${next}`);
+}
+
+/** Заменить компанию в списке свежей версией с сервера и перерисовать таблицу. */
+function replaceCompany(company, message) {
+  companies = companies.map((item) => (item.id === company.id ? company : item));
+  renderTable();
+  highlightRow(company.id);
+  if (message) showListMessage(message, 'success');
+}
+
+function showListMessage(text, kind) {
+  listMessage.textContent = text;
+  listMessage.className = `message ${kind}`;
+  listMessage.hidden = !text;
+}
+
+/** Вкладки «Все · Без сайта · Сайт с проблемами · …» с количеством в каждой (с учётом фильтров). */
+function renderTabs(filtered, assessments) {
+  const counts = { all: filtered.length };
+  for (const company of filtered) {
+    const { group } = assessments.get(company.id).site;
+    counts[group] = (counts[group] ?? 0) + 1;
+  }
 
   filterTabs.replaceChildren(...[['all', 'Все'], ...Object.entries(SITE_GROUPS)].map(([key, label]) => {
     const button = textElement('button', `${label} · ${counts[key] ?? 0}`, 'tab');
@@ -501,33 +579,61 @@ function renderTabs(assessments) {
   }));
 }
 
-function companyRow(company, assessment) {
+function companyRow(company, assessment, today) {
   const row = document.createElement('tr');
   row.dataset.id = String(company.id);
 
   const cardLabel = { other: 'Ссылка', osm: 'OSM' }[company.source] ?? SOURCE_LABELS[company.source];
-  const noteCell = cell('Заметка', company.note);
+  const noteCell = cell('Заметка', shortNote(company.note));
   noteCell.classList.add('note');
   const [date] = formatDate(company.created_at).split(', ');
 
   const selectCell = cell('Выбрать', selection.checkbox(company));
   selectCell.classList.add('select-col');
 
+  // Название — кнопка: по клику открывается карточка компании для правки.
+  const nameButton = textElement('button', company.name, 'name-button');
+  nameButton.type = 'button';
+  nameButton.addEventListener('click', async () => {
+    const result = await companyDialog.open(company.id);
+    if (!result.ok) showListMessage(result.error || 'Не получилось открыть карточку', 'error');
+  });
+  const rating = ratingText(company);
+
   row.append(
     selectCell,
     heatCell(assessment),
     cell('Компания',
-      textElement('strong', company.name),
+      nameButton,
       company.category && textElement('span', company.category, 'sub'),
+      rating && textElement('span', rating, 'sub'),
       textElement('span', `добавлена ${date}`, 'sub')),
+    statusCell(company, today),
     cell('Адрес', [company.city, company.address].filter(Boolean).join(', ')),
     cell('Телефон', company.phone && link(`tel:${company.phone}`, company.phone, 'nowrap')),
     cell('Сайт / соцсети', ...websiteParts(company), siteLine(assessment.site, company.site_check)),
     cell('Карточка', company.card_url && externalLink(company.card_url, `${cardLabel} ↗`)),
-    cell('Рейтинг', ratingText(company)),
     noteCell,
   );
   return row;
+}
+
+/** Статус — выпадающий список прямо в строке; под ним напоминание «связаться сегодня» / «просрочено». */
+function statusCell(company, today) {
+  const select = document.createElement('select');
+  select.className = `status-select status-${company.status}`;
+  select.setAttribute('aria-label', `Статус: ${company.name}`);
+  select.append(...STATUSES.map(({ id, label }) => new Option(label, id)));
+  select.value = company.status;
+  select.addEventListener('change', () => changeStatus(company, select.value));
+  const reminder = contactReminder(company, today);
+  return cell('Статус', select, reminder && textElement('span', reminder.label, `reminder ${reminder.state}`));
+}
+
+/** Заметка в таблице — коротко; целиком она в карточке компании. */
+function shortNote(note) {
+  if (!note) return '';
+  return note.length > 140 ? `${note.slice(0, 139)}…` : note;
 }
 
 /** Основная ссылка + строка с остальными: «ВКонтакте · Telegram · Taplink». */

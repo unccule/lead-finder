@@ -15,6 +15,8 @@ export function openDatabase(file, { migrations = MIGRATIONS } = {}) {
     // Если базу в этот момент пишет другая копия программы (сайт и приложение открыты одновременно),
     // подождать до 5 секунд, а не сразу падать с ошибкой «database is locked».
     db.exec('PRAGMA busy_timeout = 5000');
+    // Связи между таблицами (история статусов → компания) SQLite проверяет, только если это включить.
+    db.exec('PRAGMA foreign_keys = ON');
     migrate(db, file, migrations);
   } catch (error) {
     db.close();

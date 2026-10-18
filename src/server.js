@@ -2,6 +2,8 @@
 //
 //   GET  /api/companies     → { companies: [...] }                список, новые сверху
 //   POST /api/companies     → 201 { company } | 400 { error, fields } | 409 { error, existing }
+//   GET  /api/companies/:id → { company, history }            одна компания + история статусов
+//   PATCH /api/companies/:id → 200 { company } | 400 | 404 | 409  изменить (можно прислать одно поле)
 //   POST /api/companies/delete { ids }        → { deleted }        выборочно (запоминаются как «не предлагать»)
 //   POST /api/companies/clear  { confirm: 'all' } → { deleted, backup }  всё, с резервной копией базы
 //   GET  /api/osm/groups    → { groups: [...] }                   сферы для автопоиска
@@ -15,7 +17,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  addCompanies, addCompany, clearCompanies, companiesToCheck, deleteCompanies, findExisting, isExcluded, listCompanies,
+  addCompanies, addCompany, clearCompanies, companiesToCheck, deleteCompanies, findExisting, getCompany,
+  getStatusHistory, isExcluded, listCompanies, updateCompany,
 } from './companies.js';
 import { backupDatabase } from './db.js';
 import { OSM_GROUPS, searchOsm } from './osm.js';
@@ -69,6 +72,21 @@ export function createServer({ db, dbFile, fetchImpl = fetch, lookup, sitePauseM
       POST: async (req, res) => {
         const result = addCompany(db, await readJson(req));
         if (result.ok) return sendJson(res, 201, { company: result.company });
+        if (result.reason === 'invalid') return sendJson(res, 400, { error: 'Проверь отмеченные поля', fields: result.errors });
+        return sendJson(res, 409, { error: result.message, existing: result.existing });
+      },
+    },
+
+    '/api/companies/:id': {
+      GET: (req, res, { id }) => {
+        const company = getCompany(db, id);
+        if (!company) throw new HttpError(404, 'Такой компании нет — возможно, её уже удалили');
+        sendJson(res, 200, { company, history: getStatusHistory(db, id) });
+      },
+      PATCH: async (req, res, { id }) => {
+        const result = updateCompany(db, id, await readJson(req));
+        if (result.ok) return sendJson(res, 200, { company: result.company });
+        if (result.reason === 'not_found') throw new HttpError(404, 'Такой компании нет — возможно, её уже удалили');
         if (result.reason === 'invalid') return sendJson(res, 400, { error: 'Проверь отмеченные поля', fields: result.errors });
         return sendJson(res, 409, { error: result.message, existing: result.existing });
       },
@@ -177,10 +195,10 @@ async function handleRequest(req, res, routes) {
   }
 
   const { pathname } = new URL(req.url, 'http://localhost');
-  const route = routes[pathname];
+  const [route, params] = findRoute(routes, pathname);
   if (route) {
     const handler = route[req.method];
-    if (handler) return handler(req, res);
+    if (handler) return handler(req, res, params);
     res.setHeader('Allow', Object.keys(route).join(', '));
     return sendJson(res, 405, { error: 'Этот метод здесь не поддерживается' });
   }
@@ -191,6 +209,21 @@ async function handleRequest(req, res, routes) {
 
   res.setHeader('Allow', 'GET, HEAD');
   return sendJson(res, 405, { error: 'Этот метод здесь не поддерживается' });
+}
+
+/**
+ * Ищет маршрут по адресу. Точное совпадение ('/api/companies') или шаблон с номером
+ * ('/api/companies/:id' подходит к '/api/companies/15' → params = { id: 15 }).
+ */
+function findRoute(routes, pathname) {
+  if (Object.hasOwn(routes, pathname)) return [routes[pathname], {}];
+  for (const [pattern, route] of Object.entries(routes)) {
+    if (!pattern.includes(':')) continue;
+    const regex = new RegExp(`^${pattern.replace(/:(\w+)/g, '(?<$1>\\d{1,12})')}$`);
+    const match = regex.exec(pathname);
+    if (match) return [route, Object.fromEntries(Object.entries(match.groups).map(([key, value]) => [key, Number(value)]))];
+  }
+  return [null, {}];
 }
 
 /** Найденная в OSM компания → данные для addCompany (как будто заполнили форму). */

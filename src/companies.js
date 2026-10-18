@@ -1,11 +1,16 @@
-// Работа с компаниями в базе: список, добавление, поиск дублей.
-import { validateCompany } from '../shared/validate-company.js';
+// Работа с компаниями в базе: список, добавление, изменение, поиск дублей.
+import { FIELDS, validateCompany } from '../shared/validate-company.js';
 import { SOURCE_LABELS, textKey } from '../shared/normalize.js';
-import { classifyLink } from '../shared/link-kinds.js';
+import { classifyLink, linkKey } from '../shared/link-kinds.js';
+import { FOLLOW_UP_DAYS, STATUS_LABELS, addDays, isStatus, normalizeDate, todayISO } from '../shared/statuses.js';
 
 // Колонки, которые отдаём наружу. Служебные name_key / address_key остаются внутри.
 const PUBLIC_COLUMNS = `id, name, category, city, address, card_url, source, source_id,
-  phone, website, other_links, rating, reviews_count, note, site_check, site_checked_at, created_at, updated_at`;
+  phone, website, other_links, rating, reviews_count, note, site_check, site_checked_at,
+  status, next_contact_at, status_changed_at, created_at, updated_at`;
+
+// После этих статусов, если дата следующего контакта не указана, ставим её сами (+3 дня).
+const FOLLOW_UP_STATUSES = new Set(['contacted', 'replied', 'meeting']);
 
 /** Все компании, новые сверху. */
 export function listCompanies(db) {
@@ -51,6 +56,92 @@ export function addCompany(db, input) {
   `).run({ ...data, now });
 
   return { ok: true, company: getCompany(db, lastInsertRowid) };
+}
+
+/**
+ * Изменяет компанию. changes — только то, что поменялось: { status: 'contacted' } или все поля формы.
+ * Возвращает те же варианты, что addCompany, плюс { ok: false, reason: 'not_found' }.
+ *
+ * Правила:
+ *  • данные проверяются так же, как при добавлении, и не должны совпасть с ДРУГОЙ компанией;
+ *  • смена статуса записывается в историю;
+ *  • «Написал / Ответил / Встреча» без даты следующего контакта → дата ставится сама: сегодня + 3 дня;
+ *  • «Отказ» → дата следующего контакта убирается (напоминать не о чем);
+ *  • поменялся сайт → старая проверка сайта сбрасывается.
+ */
+export function updateCompany(db, id, changes, { now = new Date() } = {}) {
+  const current = getCompany(db, id);
+  if (!current) return { ok: false, reason: 'not_found' };
+  const input = changes !== null && typeof changes === 'object' ? changes : {};
+
+  // Берём текущие значения и накладываем изменения — так можно прислать одно поле.
+  const merged = {};
+  for (const field of Object.keys(FIELDS)) {
+    merged[field] = Object.hasOwn(input, field) ? input[field] : (current[field] ?? '');
+  }
+  const check = validateCompany(merged);
+  const errors = { ...check.errors };
+
+  const status = Object.hasOwn(input, 'status') ? input.status : current.status;
+  if (!isStatus(status)) errors.status = 'Неизвестный статус';
+
+  let nextContact = Object.hasOwn(input, 'next_contact_at') ? normalizeDate(input.next_contact_at) : (current.next_contact_at ?? '');
+  if (nextContact === null) errors.next_contact_at = 'Дата в виде ДД.ММ.ГГГГ';
+  if (Object.keys(errors).length > 0) return { ok: false, reason: 'invalid', errors };
+
+  const statusChanged = status !== current.status;
+  if (statusChanged && FOLLOW_UP_STATUSES.has(status) && !nextContact && !Object.hasOwn(input, 'next_contact_at')) {
+    nextContact = addDays(todayISO(now), FOLLOW_UP_DAYS);
+  }
+  if (statusChanged && status === 'refused') nextContact = '';
+
+  const data = withKeys(check.data);
+  const duplicate = findDuplicate(db, data, { excludeId: id });
+  if (duplicate) {
+    return {
+      ok: false,
+      reason: 'duplicate',
+      existing: duplicate.company,
+      message: `Такая компания уже есть в базе: ${duplicate.company.name} (${duplicate.why}). Изменения не сохранены.`,
+    };
+  }
+
+  const stamp = now.toISOString();
+  const siteChanged = linkKey(data.website) !== linkKey(current.website);
+  db.exec('BEGIN');
+  try {
+    db.prepare(`
+      UPDATE companies SET
+        name = $name, category = $category, city = $city, address = $address, card_url = $card_url,
+        source = $source, source_id = $source_id, phone = $phone, website = $website, other_links = $other_links,
+        rating = $rating, reviews_count = $reviews_count, note = $note, name_key = $name_key, address_key = $address_key,
+        status = $status, next_contact_at = $next_contact_at,
+        status_changed_at = CASE WHEN $status_changed THEN $stamp ELSE status_changed_at END,
+        site_check = CASE WHEN $site_changed THEN NULL ELSE site_check END,
+        site_checked_at = CASE WHEN $site_changed THEN NULL ELSE site_checked_at END,
+        updated_at = $stamp
+      WHERE id = $id
+    `).run({
+      ...data, id, status, stamp,
+      next_contact_at: nextContact || null,
+      status_changed: statusChanged ? 1 : 0,
+      site_changed: siteChanged ? 1 : 0,
+    });
+    if (statusChanged) {
+      db.prepare('INSERT INTO status_history (company_id, status, changed_at) VALUES (?, ?, ?)').run(id, status, stamp);
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+  return { ok: true, company: getCompany(db, id) };
+}
+
+/** История статусов компании: [{ status, label, changed_at }], старые сверху. */
+export function getStatusHistory(db, id) {
+  return db.prepare('SELECT status, changed_at FROM status_history WHERE company_id = ? ORDER BY id').all(id)
+    .map((row) => ({ status: row.status, label: STATUS_LABELS[row.status] ?? row.status, changed_at: row.changed_at }));
 }
 
 /**
@@ -161,9 +252,11 @@ function withKeys(data) {
  * Название и адрес сравниваем по «ключу» (textKey): без регистра, кавычек и лишних пробелов.
  * table/columns — где искать: в компаниях или в списке «не предлагать снова» (те же правила).
  */
-function findDuplicate(db, data, { table = 'companies', columns = PUBLIC_COLUMNS } = {}) {
+function findDuplicate(db, data, { table = 'companies', columns = PUBLIC_COLUMNS, excludeId = 0 } = {}) {
+  // excludeId — при изменении компании она не должна считаться «дублем» самой себя.
   const find = (where, ...params) => {
-    const row = db.prepare(`SELECT ${columns} FROM ${table} WHERE ${where} ORDER BY id LIMIT 1`).get(...params);
+    const row = db.prepare(`SELECT ${columns} FROM ${table} WHERE (${where}) AND id != ? ORDER BY id LIMIT 1`)
+      .get(...params, excludeId);
     return row ? toPlain(row) : null;
   };
 
