@@ -37,7 +37,9 @@ let companies = [];
 let filter = 'all'; // какая вкладка над таблицей выбрана: 'all' или ключ из SITE_GROUPS
 const selection = initSelection({ reload: loadCompanies }); // галочки и удаление
 const filters = initFilters({ onChange: () => renderTable() }); // поиск, статус, горячесть, сфера
-const companyDialog = initCompanyDialog({ onSaved: (company) => replaceCompany(company, `Сохранено: ${company.name}`) });
+const companyDialog = initCompanyDialog({
+  onSaved: (company, message) => replaceCompany(company, message ?? `Сохранено: ${company.name}`),
+});
 const listMessage = document.getElementById('list-message');
 const exportButton = document.getElementById('export-csv');
 let shown = { companies: [], assessments: new Map() }; // что сейчас видно в таблице — для экспорта

@@ -314,6 +314,45 @@
           </div>
         </div>
         <div id="dlg-history" class="history"></div>
+
+        <!-- Черновик предложения. У полей здесь нет name — они не попадают в сохранение компании. -->
+        <section class="offer" aria-labelledby="offer-title">
+          <div class="offer-head">
+            <p id="offer-title" class="found-title">Черновик предложения</p>
+            <div class="offer-variants" role="group" aria-label="Вариант текста">
+              <button type="button" class="tab" data-variant="short" aria-pressed="true">Коротко — мессенджер</button>
+              <button type="button" class="tab" data-variant="long" aria-pressed="false">Подробно — почта</button>
+            </div>
+          </div>
+          <textarea id="offer-text" rows="8" aria-labelledby="offer-title"></textarea>
+          <div class="offer-actions">
+            <button type="button" id="offer-copy" class="btn-secondary">Скопировать</button>
+            <button type="button" id="offer-copy-mark" class="btn-primary">Скопировать и отметить «Написал»</button>
+            <span id="offer-status" class="hint" aria-live="polite"></span>
+          </div>
+          <p class="hint">Программа ничего не отправляет сама: проверь текст, скопируй и отправь клиенту лично.</p>
+          <details class="offer-settings">
+            <summary>Моя подпись: имя, контакты, портфолио</summary>
+            <div class="form-grid">
+              <div class="field">
+                <label for="set-name">Как тебя зовут</label>
+                <input id="set-name" data-setting="sender_name" maxlength="100" placeholder="Григорий">
+                <p class="error" id="set-err-sender_name" hidden></p>
+              </div>
+              <div class="field">
+                <label for="set-contact">Контакты</label>
+                <input id="set-contact" data-setting="sender_contact" maxlength="200" placeholder="Telegram @… или телефон">
+                <p class="error" id="set-err-sender_contact" hidden></p>
+              </div>
+              <div class="field full">
+                <label for="set-portfolio">Ссылка на примеры работ</label>
+                <input id="set-portfolio" data-setting="portfolio_url" inputmode="url" maxlength="500" placeholder="mysite.ru">
+                <p class="error" id="set-err-portfolio_url" hidden></p>
+              </div>
+            </div>
+            <button type="button" id="settings-save" class="btn-secondary">Сохранить подпись</button>
+          </details>
+        </section>
       </div>
       <p id="dlg-message" class="message dialog-message" role="status" aria-live="polite" hidden></p>
       <div class="dialog-actions">

@@ -227,6 +227,18 @@ select { font: inherit; font-size: .9rem; padding: 7px 8px; border: 1px solid va
 .history { margin-top: 14px; font-size: .85rem; color: var(--muted); }
 .history ul { margin: 0; padding-left: 1.2em; }
 
+/* Черновик предложения */
+.offer { margin-top: 16px; padding: 12px; border: 1px dashed var(--accent); border-radius: var(--radius); background: var(--paste-bg); display: grid; gap: 8px; }
+.offer-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.offer-head .found-title { margin: 0; }
+.offer-variants { display: flex; flex-wrap: wrap; gap: 6px; }
+.offer textarea { min-height: 150px; font-size: .95rem; }
+.offer-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.offer .hint { margin: 0; }
+.offer-settings summary { cursor: pointer; color: var(--accent); font-size: .9rem; }
+.offer-settings[open] summary { margin-bottom: 10px; }
+.offer-settings .btn-secondary { margin-top: 10px; }
+
 /* Выбор и удаление */
 @media (min-width: 900px) { .select-col { width: 2.2rem; } }
 .companies input[type="checkbox"] { width: 18px; height: 18px; margin: 2px 0 0; cursor: pointer; }

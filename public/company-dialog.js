@@ -2,7 +2,9 @@
 // Используется встроенный в браузер элемент <dialog> — он сам затемняет фон и закрывается по Esc.
 import { request } from '/api.js';
 import { FIELDS, validateCompany } from '/shared/validate-company.js';
-import { STATUSES } from '/shared/statuses.js';
+import { STATUSES, STATUS_LABELS, formatDateRu } from '/shared/statuses.js';
+import { assessCompany } from '/shared/hotness.js';
+import { buildOffer } from '/shared/offer.js';
 
 const EXTRA_FIELDS = ['status', 'next_contact_at'];
 
@@ -19,6 +21,100 @@ export function initCompanyDialog({ onSaved }) {
   const saveButton = form.querySelector('button[type="submit"]');
   const field = (name) => form.elements.namedItem(name);
   let currentId = null;
+  let current = null; // компания, открытая в карточке (как пришла с сервера)
+
+  // ---- Черновик предложения ----
+  const offerText = document.getElementById('offer-text');
+  const offerStatus = document.getElementById('offer-status');
+  const copyMarkButton = document.getElementById('offer-copy-mark');
+  const variantButtons = [...dialog.querySelectorAll('[data-variant]')];
+  const settingInputs = [...dialog.querySelectorAll('[data-setting]')];
+  let variant = 'short';
+  let settings = {};
+  loadSettings();
+
+  for (const button of variantButtons) {
+    button.addEventListener('click', () => {
+      variant = button.dataset.variant;
+      renderOffer();
+    });
+  }
+  document.getElementById('offer-copy').addEventListener('click', async () => {
+    if (await copyOffer()) offerStatus.textContent = 'Скопировано — вставь в мессенджер или письмо.';
+  });
+  copyMarkButton.addEventListener('click', copyAndMark);
+  document.getElementById('settings-save').addEventListener('click', saveSettings);
+
+  async function loadSettings() {
+    const { ok, data } = await request('GET', '/api/settings');
+    if (!ok) return;
+    settings = data.settings;
+    for (const input of settingInputs) input.value = settings[input.dataset.setting] ?? '';
+  }
+
+  function renderOffer() {
+    for (const button of variantButtons) button.setAttribute('aria-pressed', String(button.dataset.variant === variant));
+    offerText.value = current ? buildOffer(current, assessCompany(current), settings, { variant }) : '';
+    offerStatus.textContent = '';
+    // «Отметить „Написал“» нужно только для новых компаний — остальные уже в работе.
+    copyMarkButton.hidden = current?.status !== 'new';
+  }
+
+  async function copyOffer() {
+    try {
+      await navigator.clipboard.writeText(offerText.value);
+      return true;
+    } catch {
+      // Запасной способ, если браузер не дал доступ к буферу обмена.
+      offerText.select();
+      const copied = document.execCommand('copy');
+      if (!copied) offerStatus.textContent = 'Не получилось скопировать — выдели текст и нажми Ctrl+C.';
+      return copied;
+    }
+  }
+
+  /** Скопировать текст и сразу поставить статус «Написал» (вместе с правками в карточке, если они есть). */
+  async function copyAndMark() {
+    if (!(await copyOffer())) return;
+    const input = { ...Object.fromEntries(new FormData(form)), status: 'contacted' };
+    const { ok, data } = await request('PATCH', `/api/companies/${currentId}`, input);
+    if (!ok) {
+      offerStatus.textContent = `Текст скопирован, но статус не сохранился: ${data.error || 'ошибка'}`;
+      if (data.fields) showErrors(data.fields);
+      return;
+    }
+    dialog.close();
+    const next = data.company.next_contact_at ? ` Напомню связаться ${formatDateRu(data.company.next_contact_at)}.` : '';
+    onSaved(data.company, `Текст скопирован. ${data.company.name}: статус «${STATUS_LABELS.contacted}».${next}`);
+  }
+
+  async function saveSettings() {
+    for (const input of settingInputs) clearSettingError(input.dataset.setting);
+    const body = Object.fromEntries(settingInputs.map((input) => [input.dataset.setting, input.value]));
+    const { ok, data } = await request('PUT', '/api/settings', body);
+    if (!ok) {
+      for (const [key, text] of Object.entries(data.fields ?? {})) {
+        const box = document.getElementById(`set-err-${key}`);
+        if (box) {
+          box.textContent = text;
+          box.hidden = false;
+        }
+      }
+      return;
+    }
+    settings = data.settings;
+    for (const input of settingInputs) input.value = settings[input.dataset.setting] ?? '';
+    renderOffer();
+    offerStatus.textContent = 'Подпись сохранена и добавлена в текст.';
+  }
+
+  function clearSettingError(key) {
+    const box = document.getElementById(`set-err-${key}`);
+    if (box) {
+      box.textContent = '';
+      box.hidden = true;
+    }
+  }
 
   field('status').append(...STATUSES.map(({ id, label }) => new Option(label, id)));
   for (const button of dialog.querySelectorAll('[data-close]')) button.addEventListener('click', () => dialog.close());
@@ -32,6 +128,7 @@ export function initCompanyDialog({ onSaved }) {
     if (!ok) return { ok: false, error: data.error };
 
     currentId = data.company.id;
+    current = data.company;
     clearErrors();
     showMessage('');
     title.textContent = data.company.name;
@@ -40,6 +137,7 @@ export function initCompanyDialog({ onSaved }) {
       field(name).value = value === null || value === undefined ? '' : String(value);
     }
     renderHistory(data.company, data.history);
+    renderOffer();
     dialog.showModal();
     field('status').focus();
     return { ok: true };

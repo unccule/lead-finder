@@ -90,7 +90,7 @@ export function updateCompany(db, id, changes, { now = new Date() } = {}) {
   if (Object.keys(errors).length > 0) return { ok: false, reason: 'invalid', errors };
 
   const statusChanged = status !== current.status;
-  if (statusChanged && FOLLOW_UP_STATUSES.has(status) && !nextContact && !Object.hasOwn(input, 'next_contact_at')) {
+  if (statusChanged && FOLLOW_UP_STATUSES.has(status) && !nextContact) {
     nextContact = addDays(todayISO(now), FOLLOW_UP_DAYS);
   }
   if (statusChanged && status === 'refused') nextContact = '';

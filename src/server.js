@@ -4,6 +4,7 @@
 //   POST /api/companies     → 201 { company } | 400 { error, fields } | 409 { error, existing }
 //   GET  /api/companies/:id → { company, history }            одна компания + история статусов
 //   PATCH /api/companies/:id → 200 { company } | 400 | 404 | 409  изменить (можно прислать одно поле)
+//   GET/PUT /api/settings   → { settings }                        подпись для предложений
 //   POST /api/companies/delete { ids }        → { deleted }        выборочно (запоминаются как «не предлагать»)
 //   POST /api/companies/clear  { confirm: 'all' } → { deleted, backup }  всё, с резервной копией базы
 //   GET  /api/osm/groups    → { groups: [...] }                   сферы для автопоиска
@@ -21,6 +22,7 @@ import {
   getStatusHistory, isExcluded, listCompanies, updateCompany,
 } from './companies.js';
 import { backupDatabase } from './db.js';
+import { getSettings, saveSettings } from './settings.js';
 import { OSM_GROUPS, searchOsm } from './osm.js';
 import { checkSite, createSiteCheckJob } from './site-check.js';
 
@@ -109,6 +111,15 @@ export function createServer({ db, dbFile, fetchImpl = fetch, lookup, sitePauseM
         // Сначала копия базы — если очистка была ошибкой, всё можно вернуть.
         const backup = dbFile && dbFile !== ':memory:' ? backupDatabase(db, dbFile, 'before-clear') : null;
         sendJson(res, 200, { ...clearCompanies(db), backup });
+      },
+    },
+
+    '/api/settings': {
+      GET: (req, res) => sendJson(res, 200, { settings: getSettings(db) }),
+      PUT: async (req, res) => {
+        const result = saveSettings(db, await readJson(req));
+        if (!result.ok) return sendJson(res, 400, { error: 'Проверь отмеченные поля', fields: result.errors });
+        sendJson(res, 200, { settings: result.settings });
       },
     },
 

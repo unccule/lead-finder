@@ -97,4 +97,11 @@ export const MIGRATIONS = [
       CREATE INDEX status_history_company ON status_history (company_id);
     `,
   },
+  {
+    version: 6,
+    name: 'Настройки (подпись для предложений)',
+    // Храним в базе, а не в браузере: у программы при каждом запуске новый адрес (порт),
+    // и браузерное хранилище каждый раз было бы пустым.
+    sql: 'CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+  },
 ];
