@@ -46,8 +46,8 @@ const [appDir] = await packager({
   },
   // Пути относительно папки проекта: что НЕ класть в программу.
   ignore: [
-    /^\/(test|data|dist|scripts|node_modules|\.git|\.claude|\.vscode)(\/|$)/, // node_modules: у программы нет зависимостей
-    /^\/(\.env|\.env\.example|\.gitignore|\.gitattributes|start-leads\.cmd|README\.md|package-lock\.json)$/,
+    /^\/(test|data|dist|scripts|node_modules|graphify-out|\.git|\.claude|\.vscode)(\/|$)/, // node_modules: у программы нет зависимостей
+    /^\/(\.env|\.env\.example|\.gitignore|\.gitattributes|start-leads\.cmd|README\.md|CLAUDE\.md|package-lock\.json)$/,
   ],
 });
 
