@@ -2,3 +2,5 @@
 * text=auto eol=lf
 # ...а .cmd — с CRLF: так их надёжнее понимает командная строка Windows
 *.cmd text eol=crlf
+# Строку ниже добавил graphify: как склеивать граф при слиянии веток (сам граф в git не хранится, это на будущее)
+graphify-out/graph.json merge=graphify
